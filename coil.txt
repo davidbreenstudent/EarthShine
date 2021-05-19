@@ -1,0 +1,481 @@
+constants[[p1dir $22][p1out $21][p1sel $20]
+          [p2dir $2A][p2out $29][p2sel $2E]
+          [p3dir $1A][p3out $19][p3sel $1B]
+          [p4dir $1E][p4out $1D][p4sel $1F]
+          [p5dir $32][p5out $31][p5sel $33]
+          [p6dir $36][p6out $35][p6sel $37]
+          [ucb0ctl0 $68][ucb0ctl1 $69]
+	  [ucb0br0 $6a][ucb0br1 $6b]
+	  [ucb0stat $6d][ucb0rxbuf $6e][ucb0txbuf $6f]
+          [ADC12CTL0 $1A0][ADC12CTL1 $1A2][ADC12MEM0 $140]
+          [ADC12IE $1A6][ADC12MCTL0 $80][ADC12IFG $1A4]
+          [ADC12IV $1A8]
+          [adcae0 $4a][adcae1 $4b][adcctl0 $01b0][adcctl1 $1b2][adcmem $1b4]
+          [magbuffer $1cf0][magfbuffer $4000]
+          [packet $1f80][rpacket $1fc0]
+          [bumpcount $be00]
+	  [type_gyro 60][type_mag 61]
+          ]
+
+
+define vm-run      [][ output btst p1in channel0 ]
+define vm-run-init [][ bclr p1sel channel0
+                       bclr p1dir channel0 ]
+
+
+global[xmax xmin ymax ymin zmax zmin minmaxcnt ftx fty ftz]
+global [lasttime xnum]
+
+to ul-power
+         init-OnBoardLeds ;prepares the IO pins that control the on board LEDs
+         redon ;turns on the red LED
+         wait 10 ;wait 1 second
+         redoff ;turns off the red LED
+         wait 10 ;wait 1 second
+
+     ul-init
+     ul-go
+end
+
+to ul-init
+         yellowon ;turns on the red and green LEDs
+         wait 10 ;wait 1 second
+         alloff ;turns off the red and green LEDs
+         wait 10 ;wait 1 second
+   init-pins
+;   dp5enable    ;enable pin 5 (Enable for H-bridge)
+   dp5output    ;set pin 5 to output the set value
+   dp5off       ;set value off (disable H-bridge)
+;   dp6enable    ;enable pin 6 (Forward/Reverse current in coil)
+   dp6output    ;set pin 6 to output the set value
+   dp6off       ;sets sign of coil current to +/- (signs not determined)
+   
+   setxmax -32767
+   setymax -32767
+   setzmax -32767
+   setxmin 32766
+   setymin 32766
+   setzmin 32766
+
+   setlasttime 0
+   setxnum 200
+
+   vm-run-init
+end
+
+to ul-go
+   ; flight_ft
+   ;
+   loop [packet-loop mwait 10000]
+   ; loop [gyro-packet mwait 10000]
+    if (vm-run = 0) [redon stop]
+end
+
+;    TO DO:
+;       make "offset" in "avg" a float (not possible directly, only ints)
+;       find actual minimum value for maxs and maximum value for mins
+
+
+to avg :max :min     ;determine offset by inputting mins and maxs (ex: avg :xmax :xmin)
+;   if minmaxcnt < 30    ;make sure enough values have been compared to find mins and maxs
+;      output 0
+   let [ offset 0]
+   make "offset (:max + :min) / 2  ;determine offset of magx from averaging xmax and xmin
+   output :offset
+end
+
+to findmax :max :out     ;compare current stored maximum with the current output
+   if :out > :max
+      [output :out]
+   setminmaxcnt minmaxcnt + 1
+   output :max
+end
+
+to findmin :min :out
+   if :out < :min
+      [output :out]
+   setminmaxcnt minmaxcnt + 1
+   output :min
+end
+
+to tempo  ; temporary test function
+   ul-init
+   loop[magread mwait 500]
+end
+
+to 9DOF-spinup
+
+   let [ hb 0 ]
+   let [ lb 0 ]
+   let [ xout 0 ]
+   let [ yout 0 ]
+   let [ zout 0 ]
+
+   init-i2c-basic
+
+   i2c-tx-address 30
+   i2c-tx-data 2
+   i2c-tx-data $00
+
+
+   i2c-rx-address 30
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "xout (lsh :hb 8) + :lb
+   setxmax findmax xmax :xout
+   setxmin findmin xmin :xout
+   make "xout :xout - avg xmax xmin
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "zout (lsh :hb 8) + :lb
+   setzmax findmax zmax :zout
+   setzmin findmin zmin :zout
+   make "zout :zout - avg zmax zmin
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "yout (lsh :hb 8) + :lb
+   setymax findmax ymax :yout
+   setymin findmin ymin :yout
+   make "yout :yout - avg ymax ymin
+   					;Temp code!!!!!!!!!
+   ;print :xout
+   ;print xmin
+   ;print xmax
+   ;print :yout
+   ;print ymin
+   ;print ymax
+   ;print :zout
+   ;print zmin
+   ;print zmax
+
+   					;Temp code!!!!!!!!!
+   i2c-stop
+
+   ifelse (:yout > 0)
+      [ dp5on
+      dp6off
+      redon
+      mwait 300
+      redoff
+      dp5off ]
+      [ dp5on
+      dp6on
+      greenon
+      mwait 300
+      greenoff
+      dp6off
+      dp5off ]
+end
+
+to spinup
+   loop[ 9DOF-spinup ]
+end
+
+
+;Use magnetic field, turn off and on when field
+;is positive or negative in this direction to 
+;increase/decrease angular momentum vector.
+
+;Take ten gyro measurements and take the average.
+;if these ten exceed the ten averaged measurements
+;from the last cycle, turn on coil in the same direction.
+
+;use value from gyroscope to determine time to turn
+;on coil based on period.
+;need to normalize these outputs to angular velocity.
+
+to init-pins
+writeb p2dir $38
+writeb p2out $00
+write adcctl0 $10
+write adcctl1 $f8
+bset adcae0 1
+bset adcctl0 2
+cyan wait 1 magenta wait 1 blue wait 1 off
+end
+
+
+;to flash
+;repeat 10 [cyan mwait 50 magenta mwait 50 blue mwait 50]
+;off
+;end
+
+
+to magread ;  :n  (remove comment for flash)
+
+   let [ hb 0 ]
+   let [ lb 0 ]
+   let [ xout 0 ]
+   let [ yout 0 ]
+   let [ zout 0 ]
+
+   
+
+   i2c-tx-address 30
+   i2c-tx-data 2
+   i2c-tx-data $00
+
+
+   i2c-rx-address 30
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "xout (lsh :hb 8) + :lb
+   setxmax findmax xmax :xout
+   setxmin findmin xmin :xout
+   make "xout :xout - avg xmax xmin
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "zout (lsh :hb 8) + :lb
+   setzmax findmax zmax :zout
+   setzmin findmin zmin :zout
+   make "zout :zout - avg zmax zmin
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "yout (lsh :hb 8) + :lb
+   setymax findmax ymax :yout
+   setymin findmin ymin :yout
+   make "yout :yout - avg ymax ymin
+
+   i2c-stop
+;   write :n     :xout  (remove comment for flash)
+;   write :n + 2 :yout  (remove comment for flash)
+;   write :n + 4 :zout  (remove comment for flash)
+
+   print :xout
+   print :yout
+   print :zout
+
+end
+
+
+
+
+to readMag :n
+
+   let [ hb 0 ]
+   let [ lb 0 ]
+   let [ xout 0 ]
+   let [ yout 0 ]
+   let [ zout 0 ]
+
+   init-i2c-basic
+
+   i2c-tx-address 30
+   i2c-tx-data 2
+   i2c-tx-data $00
+
+   i2c-rx-address 30
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "xout (lsh :hb 8) + :lb
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "zout (lsh :hb 8) + :lb
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   make "yout (lsh :hb 8) + :lb
+
+   i2c-stop
+
+   if :n = 1 [output :xout]
+   if :n = 2 [output :yout]
+   if :n = 3 [output :zout]
+end
+
+
+; Make indivindual axes measurements as ftx, fty, ftz, as globals
+to 9DOF-Mag-Read-xyz
+
+   let [ hb 0 ]
+   let [ lb 0 ]
+
+   init-i2c-basic
+
+   i2c-tx-address 30
+   i2c-tx-data 2
+   i2c-tx-data $00
+
+   i2c-rx-address 30
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   setftz (lsh :hb 8) + :lb
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   setfty (lsh :hb 8) + :lb
+
+   make "hb i2c-rx-data
+   make "lb i2c-rx-data
+
+   setftx (lsh :hb 8) + :lb
+
+   i2c-stop
+
+end
+
+
+
+
+
+
+
+;TEMP CODE
+
+; this is  a word that is run one time
+to make-backup-copylet [addr $4000]repeat $3000 / $200 [eraseseg :addr make "addr :addr + $200]fcpy $2100 $4000 $0f00fcpy $c200 $5000 $1e00end
+to fcpy :src :dst :lenrepeat :len[writefb :dst readb :srcmake "src :src + 1make "dst :dst + 1]end
+
+to record :n :m
+  let [cnt 1]
+  let [addr magbuffer]
+  eraseseg magfbuffer
+   resett
+   repeat :n [
+     magread ;   :addr   (remove comment for flash)
+     make "addr :addr + 6
+     waituntil [timer > (:m * :cnt)]
+     make "cnt :cnt + 1
+     ]
+   fcpy magbuffer magfbuffer 6 * :n
+end
+
+;to use_ft    ;get gyro data, give range of frequencies, find max power density, give new frequencies
+;   let [spin 9dof-gyro-z] ; is z the spin-axis? (z-axis changes between 9dof parts)
+;   make "spin :spin * Norm_factor ; normalization factor to give spin right units
+;   
+;   ft (spin + .5 * range) (spin - .5 * range) ;FT with frequency range
+;end
+   
+
+; Q: What is saveaxis?
+; Q: How is "axis" iterated through?
+
+;to do_all_FT
+;   default_setup
+;   setarr_size #   ;change data array size
+;   setf0 #         ;set starting frequency range
+;   setf1 #         ;set ending frequency
+;   setaxis 3       ;set axis number to spin-axis
+;end
+
+to gyro-packet
+
+    9dof-gyro-read
+    mwait 10
+    9Dof-Accel-Init
+    mwait 10
+    9dof-Accel-read
+
+	mwait 10
+	9Dof-Mag-Init
+	mwait 10
+	9dof-mag-read
+        mwait 10
+ 	clear-res
+ 
+        init-packet type_gyro
+; 	writeb rpacket + 1 type_gyro
+
+;     fprint bumpcount
+
+ ;	fprint timestamph
+
+ ;	fprint timestampl
+;      	fprint gth
+;	fprint gtl  ; time of gyro sensor read 
+;	fprint gtmpout
+
+	packet-word gxout
+	packet-word gyout
+	packet-word gzout
+
+	packet-word mzout
+;	packet-word mxout
+;	packet-word myout
+;	packet-word mzout
+
+;	packet-word axout
+;	packet-word ayout
+;	packet-word azout
+
+;	fprint mth
+;	fprint mtl ; time of mag read, this and the gyro time can be used to calculate delta read time for sensors
+;	send-packet
+
+        add-checksum
+end
+
+to do_mag
+	let [i 0]
+	flag 111                         ; mark the beginning of magnetometer analysis
+	flight_ft
+	repeat 16 [                      ; send mag_data and pd_data
+		mag-packet :i
+		make "i :i + 32]              ; 16 words means 32 bytes
+	clear-res
+end
+
+to flag :n
+	clear-res
+	print :n
+	fprint read bumpcount
+	fprint timestamph
+	fprint timestampl
+	fprint :n
+end
+
+to mag-packet :offset   ; send 16 values starting at offset
+	let [i :offset]
+	prs |sending magnetometer packet|
+       
+	clear-res
+
+	writeb rpacket + 1 type_mag
+	fprint read bumpcount
+	fprint tstarth
+	fprint tstartl
+	fprint axis
+	fprint s_r
+	fprint m_avg
+	fprint :offset 
+	repeat 16 [fprint read mag_data + :i make "i :i + 2]  
+end
+
+to packet-loop
+  setxnum xnum + 1
+  let [xxnum xnum]
+  blueon
+  gyro-packet
+;  build-packet :xxnum
+  make "xxnum :xxnum + 1
+  mwait 1000
+  blueoff
+end
+
+
+to build-packet :n
+init-packet 59
+packet-word :n
+packet-word :n + 2
+packet-word :n + 4
+packet-word :n + 6
+add-checksum
+end
+

@@ -1,0 +1,10 @@
+print 1234
+  1234
+print feot?
+  true
+; setfread, freadline, feot?, parse
+; setfread "file
+; loop [ if feot? [stop]
+;        process freadline ]
+fclose
+

@@ -1,0 +1,61 @@
+
+to groundloop
+let [ts -1]
+let [addr 0]
+let [node 0]
+setup-rx
+greenoff
+setlasttime 0
+setxnum 0
+
+loop [
+  redon
+  mwait 100
+  redoff
+  mwait 100
+
+  if receive-packet? [
+  greenon
+  pprint-packet   ; gets the packet from radio
+; add code to print packet
+
+  ]
+
+  if stray-packet? [
+    blueon
+
+    ;mwait 1000
+    clear-res
+    make "addr inbuf
+    repeat readb inbuf-len [fprintb readb :addr make "addr :addr + 1]
+    fprintb 0
+    send-packet
+    clear-stray
+    setup-rx
+;    mwait 500           ; wait 5 seconds for the other side to respond
+
+    blueoff ]
+  ]
+end
+
+to pprint-packet
+ prs |got packet|
+
+let [len rreg $4b
+     addr rpacket]
+ print :len
+
+make "addr rpacket
+
+repeat :len [writeb :addr rreg $7f make "addr :addr + 1]
+
+make "addr packet
+repeat 15 [prf "|%b | readb :addr
+                make "addr :addr + 1
+           ]
+prs "
+
+end
+
+
+

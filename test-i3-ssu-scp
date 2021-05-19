@@ -1,0 +1,1 @@
+scp test-i3-ssu-audio | ssh -t -p 25000 192.168.2.1 "ssh -t -p 25000 130.157.169.14 'ssh -t 192.168.2.3 test-i3-ssu-audio'"

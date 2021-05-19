@@ -1,0 +1,251 @@
+to run-once
+	  init-coil
+	  stopvm
+	  wait 10
+		ul-power
+		wait 10
+		ul-init
+		wait 10
+;		ul-go        ; why does this not block ?
+                ul-run [ flight_ft ]
+                desktop-clear
+		Xmagdata
+                screencapture
+                wait 30
+end
+
+to init-coil
+   compile
+   talkto 27
+   setup-screen
+end
+
+to Xmagdata
+	getdata $500 256	;mag data plot
+	plotmag "mag
+        display-plot tile 2 2 2 2
+        wait 20
+
+	getdata $600 256	;ft plot
+	plotmag "ft
+        display-plot tile 2 2 2 1
+        wait 20
+
+	ul-run [ print peak1 ]
+	ul-run [setf0 peak1 - 2] ;4/13/15 edit:  ul-run lines commented back in
+	ul-run [setf1 peak1 + 2]
+	ul-run [write_pd]
+	getdata $600 256	;ft plot
+	plotmag "ftX
+        display-plot tile 2 2 1 2
+        wait 20
+
+;	blindexec "|cp screen.png zoomedft.png|
+;	displayzoomedFT
+end
+
+to getdata :m :n
+   let[cnt 0]
+   let[addr :m]
+   make "tmp []
+   make "magdata []
+   let[div (:n / 32)]
+
+   repeat :div [
+      make "tmp1 rl :addr 32  ;'m' is hex address, 'n' is # of mag datum (n * 2 because each is 2 bytes)
+      make "tmp se :tmp :tmp1
+      make "addr :addr + 32
+      ]
+
+ repeat (count :tmp) / 2 [
+      make "magword wnth :cnt :tmp
+      if :magword > 32767 [make "magword :magword - 65536]
+      make "magdata se :magdata :magword
+      make "cnt :cnt + 1]
+
+end
+
+to plotmag :pname
+   plot-filename :pname
+   print (se "|Display | :pname "| Plot|)
+   aspect 2 2 
+
+   let [cnt 0]
+   let [tdif 1]
+   make "xlist []
+   repeat count :magdata [
+      make "xlist se :xlist :cnt * :tdif
+      make "cnt :cnt + 1 ]
+
+   x-data "|Time(sec)| :xlist
+   y-data "|Magnetic field| :magdata
+
+   ltype 0      ; black white lines
+   ptype 2      ; circles
+
+   limits 0 xupper ylower yupper
+
+   clean
+   select-all
+   box
+   xaxis 13 130 1 true
+   yaxis 10 100 1 true
+
+   title "|Magnetic field versus Time|
+   histogram
+end
+
+to displaymag
+   redraw
+   wait 10
+  clear-display
+   display "|-geometry 600x400+1000+10|
+end
+
+to displayFT
+   redraw
+   wait 10
+;   clear-display
+   display "|-geometry 600x400+100+10|
+end
+
+to displayzoomedFT
+   redraw
+   wait 10
+ ;  clear-display
+   display "|-geometry 600x400+1000+400|
+end
+
+
+to tempgraph :datap :add1 :add2 :add3 ; 'datap' is number of data points
+   getdata :add1 :datap
+   plotmag
+   getdata :add2 :datap
+   plotmag
+   getdata s :add3 :datap
+   plotmag
+end
+
+to display_mag
+   let [value 0]
+   make "mag_data rl 5120 50
+   let [i 0]
+   repeat (25) [
+   make "value nth :i :mag_data
+   make "value :value + 256 * (nth :i + 1 :mag_data)
+   if :value > 32768 [make "value :value - 65535]
+   print :value
+   make "i :i + 2]
+
+end
+
+to display_pd
+   let [value 0]
+
+   make "pd_data rl 5376 32
+   make "pd_data se :pd_data rl (5376 + 32) 32
+   make "pd_data se :pd_data rl (5376 + 64) 32
+   make "pd_data se :pd_data rl (5376 + 96) 32
+   make "pd_data se :pd_data rl (5376 + 128) 32
+   make "pd_data se :pd_data rl (5376 + 160) 32
+   make "pd_data se :pd_data rl (5376 + 192) 32
+   make "pd_data se :pd_data rl (5376 + 224) 32
+
+   let [i 0]
+   repeat (128) [
+      make "value nth :i :pd_data
+      make "value :value + 256 * (nth :i + 1 :pd_data)
+      if :value > 32768 [make "value :value - 65535]
+   print :value
+   make "i :i + 2]
+
+end
+
+to packet-words :l           ; this version leaves off the checksum
+  let [res []]
+  let [nws (first :l) / 2 + 2]
+  if ( :nws > 25 ) [ make "nws 25 ]
+  dotimes [i :nws - 1][make "res se :res bf 100000 + wnth :i :l]
+  output :res
+end
+
+to process-packet
+  let [th 0]
+  let [tl 0]
+
+  make "oldcheck :check
+  let [nws ((first :packet-bytes) / 2)]
+  make "check wnth :nws :packet-bytes
+  if not (:check = :oldcheck) [ 
+    make "type nth 1 :packet-bytes
+    make "wp packet-words :packet-bytes
+    print ( se word "T bf 100 + :type round now / 1000 :wp  )    ; from rfmbridge_v9
+    make "th wnth 2 :packet-bytes         ; timestamph from packet
+    make "tl wnth 3 :packet-bytes         ; timestampl from packet
+    if :ftime = 0 [ make "ftime 1
+                    make "t0 packet-time :th :tl
+                  ]
+    make "gyroz-data se :gyroz-data (packet-time :th :tl) - :t0
+    make "gyroz-data se :gyroz-data wnth 7 :packet-bytes     ; word 11 is gyro z axis
+    plot-gyroz
+;  clear-display
+    gyro-display
+  ]
+end
+
+to wnth :i :l
+  output (nth 2 * :i :l) + 256 * (nth 2 * :i + 1 :l)
+end
+
+to see-packets
+  let [cnt 0]
+  make "gyroz-data []
+  make "check 0
+  make "ftime 0
+  setup-screen
+  loop [
+    ul-run [gyro-packet]
+  ;  print :cnt
+    make "packet-bytes rl $1fc0 42
+  ;  print :packet-bytes
+  ;  print count :packet-bytes
+    make "cnt :cnt + 1clear-display
+    if (count :packet-bytes) > 4 [ process-packet ]
+    wait 30   ; wait 30 sec
+    ]
+end
+
+to gyro-display
+;blindexec "|./pkill.sh xv|
+ blindexec "|./pkill.sh Preview|
+; blindexec "|pkill eog|
+
+wait 10
+redraw
+ blindexec "|open -a Preview screen.png|
+; blindexec "|eog -gn screen.png|
+;blindexec "|/sw/bin/xv -geometry 600x400+1000+100 screen.png|
+end
+
+to plot-gyroz
+make "ncol 2
+make "data-list :gyroz-data
+xcol 1
+ycol 2
+select-all
+limits xlower xupper ylower yupper
+clean
+grid 10 10
+box
+xaxis 10 1
+yaxis 10 1
+title "|GyroZ versus Time|
+xlabel "|Time (seconds)|
+ylabel "GyroZ
+histogram
+end
+
+to packet-time :n :m
+output (10 * :n) + (:m / 1000)
+end
+

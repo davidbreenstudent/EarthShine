@@ -1,0 +1,392 @@
+;*******************************************************************************
+; Code to run I2C using USCI inherent to MSP430f2410 for uLogo Dev Board 3.5
+;
+; Written by Hunter Mills on 7/3/14
+; Updated by Hunter Mills on 10/1/14 (Version 4)
+;
+; Basic understanding of I2C is essential to use the following code. A good 
+; introduction is available at:
+;
+;     https://learn.sparkfun.com/tutorials/i2c/all
+;*******************************************************************************
+
+
+; Table of Contents
+;*******************************************************************************
+; 1) Current State of the Code
+; 2) Pin Outs
+; 3) Constants
+; 4) I2C Words
+;       A) Init/Uninit I2C
+;       B) Call Address for Transmit
+;       C) Transmit Data
+;       D) Call Address for Receive
+;       E) Receive Data
+;       F) Stop Communication
+; 5) Sample Code
+; 6) Version Summary
+;*******************************************************************************
+
+
+; 1) Current State of the Code
+;*******************************************************************************
+; Code to run I2C using USCI built into MSP430f2410. At this
+; point the code does not support interupts, multi-master 
+; systems, and only supports the MSP430 as a Master. It does 
+; have basic error handaling that reports ther error and 
+; resets the communication bus.
+;
+; USCI stands for universal serial communication interface,
+; and is capable of handling multiple communication protocols
+; including both I2C and SPI. This is done by setting 
+; appropriate register values at appropriate times. An 
+; introduction to these concepts are outlined in the following
+; links:
+; 
+; http://tina.bu.edu/ec450s11/CourseDocuments/Materials/
+;    Handouts/TI-Text-Chapt14-usi-subset-handout.pdf
+; 
+; http://tina.bu.edu/ec450s10/materials/Handouts/FamilyChapters
+;    /16-USCI-SPI-slau144e.pdf
+;*******************************************************************************
+
+
+; 2) Pin Outs
+;*******************************************************************************
+; All register values are correlated to USCI_B0. As is, this code will only 
+; work on the pins correlated to USCI_B0. To use other USCI blocks, all 
+; register locations will need to be altered.
+;
+;    - I2C Data Line (SDA)      <---->       Digital Pin 2 (P5.2)
+;    - I2c Clock Line (SCL)     <---->       Digital Pin 3 (P5.1)
+;
+; To determine other USCI block register locations and pin outs, consult the
+; MSP430f2410 data sheet available at:
+;    http://www.ti.com/lit/ds/symlink/msp430f233.pdf
+;*******************************************************************************
+
+
+; 3) Constants
+;*******************************************************************************
+; Constants as per MSP430f2410 datasheet available at:
+;
+; http://www.ti.com/lit/ds/symlink/msp430f2410.pdf
+;
+; and individual variable specifiactions at:
+;
+; http://tina.bu.edu/ec450s10/materials/Handouts/FamilyChapters
+; /16-USCI-SPI-slau144e.pdf
+;
+
+constants [                         ; Register ID's
+
+   [ p5sel $33 ][ channel1 $02 ][ channel2 $04 ]
+
+   [ UCB1TXBUF $DF ]                   ; Transmit Buffer
+   [ UCB1RXBUF $DE ]                   ; Receive Buffer
+   [ UCB1STAT $DD ]                    ; Status Register
+   [ UCB1I2CSA $17E ]                  ; I2C Slave Address
+;   [ UCB1CIE $DC ]                     ; I2C Interupt Enable (Unused)
+   [ UCB1BR1 $DB ][ UCB1BR0 $DA ]      ; Baud Rate Control
+   [ UCB1CTL1 $D9 ][ UCB1CTL0 $D8 ]    ; Control Registers
+   [ UCB1SA $17E ][ UCB1OA $17C ]      ; I2C Addresses
+;   [ UCB1I2CIE $DC ]                   ; Interupt Enable (Unused)
+   [ UC1IFG $07 ]                      ; Interupt Flags
+
+   [ bit0 $01 ][ bit1 $02 ][ bit2 $04 ][ bit3 $08 ]
+   [ bit4 $10 ][ bit5 $20 ][ bit6 $40 ][ bit7 $80 ]
+]
+
+; Bits in UCB1CTL0
+;
+
+constants [
+   [ UCSYNC $01 ]                 ; Synchronous Mode (0 = Async, 1 = Sync)
+   [ UCMODE0 $02 ][ UCMODE1 $04 ] ; Mode Select (11 for I2C)
+   [ UCMST $08 ]                  ; Master Select (0 = Slave, 1 = Master)
+   [ UCMM $20 ]                   ; Multi-Master Select (0 = Single, 1 = Multi)
+   [ UCSLA10 $40 ]                ; Address Mode (0 =  7 bit add, 1= 10 bit add)
+   [ UCA10 $80 ]                  ; Own Address (0 =  7 bit add, 1 = 10 bit add)
+]
+
+; Bits in UCB1CTL1
+;
+
+constants[
+   [ UCSWRST $01 ]                ; Software Reset (1 = Enable, 0 = Disable)
+   [ UCTXSTT $02 ]                ; Transmit START (1 = Generate, 0 = Nothing)
+   [ UCTXSTP $04 ]                ; Transmit STOP (1 = Generate, 0 = Nothing)
+   [ UCTXNACK $08 ]               ; Transmit NACK (1 = Generate, 0 = Nothing)
+   [ UCTR $10 ]                   ; Transmit/Receive Mode (0 = Rec, 1 = Trans)
+   [ UCSSEL0 $40][ UCSSEL1 $80 ]  ; Clock Source (01 for internal clock)
+]
+
+; Bits in UCB1BR0 and UCB1BR1 - Select CLock Rate
+;
+; Bit clock prescaler setting. The 16-bit value of (UCBxBR0 + UCBxBR1 × 256) 
+; forms the prescaler value.
+;
+; Clock Frequency = 12MHz / prescalar value.
+;
+
+; Bits in UCB1STAT
+;
+
+constants [
+   [ UCALIFG $01 ]                ; Arbitration Flag (0 = Not Set,  1 =  Set)
+   [ UCSTTIFG $02 ]               ; Start Flag (0 = Not Set,  1 =  Set)
+   [ UCSTPIFG $04 ]               ; Stop Flag (0 = Not Set,  1 =  Set)
+   [ UCNACKIFG $08 ]              ; Nack Flag (0 = Not Set,  1 =  Set)
+   [ UCBBUSY $10 ]                ; Busy Flag (0 = Not Set,  1 =  Set)
+   [ UCGC $20 ]                   ; General Call Flag (0 = Not Set,  1 =  Set)
+   [ UCSCLLOW $40 ]               ; SCL Low Flag (0 = Not Set,  1 =  Set)
+]
+
+; Bits in UC1IFG
+;
+
+constants [
+   [ UCB1RXIFG $04 ]   ; RX Flag: Set when Read Pending (0 = Not Set,  1 =  Set)
+   [ UCB1TXIFG $08 ]   ; TX Flag: Set when Empty(0 = Not Set,  1 =  Set) 
+]
+;*******************************************************************************
+
+
+; 4) I2C Words
+;*******************************************************************************
+; Below are the words used to perform I2C communication. There are six primary
+; sets of words.
+;
+;       A) Init/Uninit I2C
+;       B) Call Address for Transmit
+;       C) Transmit Data
+;       D) Call Address for Receive
+;       E) Receive Data
+;       F) Stop Communication
+;    
+; Each word will be fully expalined in each word's section.
+;*******************************************************************************
+
+
+; 4A) I2C Words: Init and Uninit (init-i2c-basic and uninit-i2c)
+;*******************************************************************************
+; Init Step as per:
+;
+; http://tina.bu.edu/ec450s10/materials/Handouts/FamilyChapters
+; /16-USCI-SPI-slau144e.pdf
+;
+; on page 32.
+;
+; 1) Set UCSWRST
+; 2) Initialize Registers
+; 3) Initiate Ports
+; 4) Clear UCSWRST
+; 5) Enable Interupts (not done at this time)
+;
+;    >>>>>> This is a General Init that may not work for every device <<<<<<
+;               >>>>>> Must consult each device's datasheet <<<<<<
+;
+
+to init-I2C-basic
+
+   bset UCB1CTL1 UCSWRST   ; Step 1
+
+   bset p5sel channel1     ; Step 3: Disable GPIO
+   bset p5sel channel2     ; and enable USCI
+
+   bset UCB1CTL0 UCSYNC    ; Step 2: Syncronous Communication
+   bset UCB1CTL0 UCMODE0   ; I2C Mode
+   bset UCB1CTL0 UCMODE1
+   bset UCB1CTL0 UCMST     ; Master Mode
+   bclr UCB1CTL0 UCMM      ; Single Naster
+   bclr UCB1CTL0 UCSLA10   ; 7-bit Addressing
+   bclr UCB1CTL0 UCA10
+
+   bclr UCB1CTL1 UCSSEL0   ; SM Clock Selected
+   bset UCB1CTL1 UCSSEL1
+
+   writeb ucb1br0 0	   ; ~100khz Clock Rate
+   writeb ucb1br1 11
+
+   bclr UCB1CTL1 UCSWRST   ; Step 4
+
+end
+
+; Function to cause a restart
+;
+
+to uninit-I2C
+   bset UCB1CTL1 UCSWRST   ; Reset
+   mwait 1
+   bclr UCB1CTL1 UCSWRST   ; Enable
+end
+;*******************************************************************************
+
+
+; 4B) I2C Word: Call Address for Transmit (i2c-tx-address)
+;*******************************************************************************
+; Function to call a I2C device (Page 41).
+;
+; Write the Address in the appropriate register.
+; Set to transmit mode.
+; Set the Transmit Start bit.
+;
+
+to I2C-TX-Address :n
+
+   writeb UCB1I2CSA :n        ; Address
+   bset UCB1CTL1 UCTR         ; Transmit Mode
+   bset UCB1CTL1 UCTXSTT      ; Generate Start
+
+   mwait 10
+
+   if ((btst ucb1stat ucnackifg) = 1) [
+      prs "|TX Address Not Received: Communication Aborted|
+      writeb UCB1TXBUF 0
+      i2c-stop                ; Error Check
+   ]
+
+end
+;*******************************************************************************
+
+
+; 4C): I2C Word: Transmit Data (i2c-tx-data)
+;*******************************************************************************
+; Function to transmit a data byte (Command) (page 41). Should
+; be used after I2C-TX-Address or after already sending a data
+; byte.
+;
+; Write command to the TX Buffer
+;
+
+to I2C-TX-Data :m
+
+   writeb UCB1TXBUF :m       ; Load Data to be sent
+   mwait 10                  ; Wait for data to be sent
+   
+   if ((btst ucb1stat ucnackifg) = 1) [
+      prs "|Data Byte Not Reveived: Communication Aborted|
+      i2c-stop               ; Error Check
+   ]
+
+end
+;*******************************************************************************
+
+
+; 4D) I2C Word: Call Address for Receive (i2c-rx-address)
+;*******************************************************************************
+; Function to read data from a I2C device (page 43).
+;
+; Write the Address in the appropriate register.
+; Set to receive mode.
+; Generate a Start condition.
+; Wait for the response to be stored in the RX Buffer.
+;
+
+to I2C-RX-Address :n
+
+   writeb UCB1I2CSA :n       ; Address
+   bclr UCB1CTL1 UCTR        ; Receive Mode
+   bset UCB1CTL1 UCTXSTT     ; Generate Start
+
+   mwait 10
+
+   if ((btst ucb1stat ucnackifg) = 1) [
+      prs "|RX Address Not Received: Communication Aborted|
+      i2c-stop               ; Error Check
+   ]
+
+end
+;*******************************************************************************
+
+
+; 4E) I2C Word: Receive Data (i2c-rx-data)
+;*******************************************************************************
+; Function to read data from a I2C device (page 43).
+;
+; Read UCB1 Receive Buffer
+;
+
+to I2C-RX-Data
+
+   let [ out 0 ]
+
+   make "out read UCB1RXBUF  ; Read Received Data
+   mwait 10
+
+   output :out               ; Return Received Data
+
+end
+;*******************************************************************************
+
+
+; 4F) I2C Word: Stop Communication (i2c-stop)
+;*******************************************************************************
+; Function to generate a stop condition
+; 
+; Function also clears the RX Buffer of Extra Data
+
+to I2C-Stop
+
+   bset ucb1ctl1 uctxstp     ; Generate Stop Condition
+
+   mwait 5                   ; Wait for data to be loaded
+   ignore i2c-rx-data        ; Clear Buffer
+   mwait 5                   ; Wait for flag to be cleared
+
+end
+;*******************************************************************************
+
+
+; 5) Example Code
+;*******************************************************************************
+; Typical Flow for a generalized sensor
+;
+;    Initiate I2C
+;    Generate sensor address in transmit mode
+;    Send data byte to command what info you want
+;    Generate sensor address in receive mode
+;      output that data
+;    Generate stop condition
+;
+;   In which:
+; 
+; BEGIN init-I2C-basic --> I2C-TX-Address :n --> I2C-TX-Data :m
+; --> I2C-RX-Adress :n --> I2C-RX-Data --> I2C-Stop END
+;
+; There may also be multiple TX-Data and RX-Data steps in a row
+; to transmit or read more that 8 bits at a time.
+;
+; EXAMPLE:
+; 
+; Code to use I2C to get the name of the Gyroscope onboard
+; Sparkfun's 9 Degrees of Freedom Sensor Stick
+;
+;
+ to Print-Name-9DOF-Gyro
+    init-i2c-basic
+    i2c-tx-address 104
+    i2c-tx-data 0
+    i2c-rx-address 104
+    print i2c-rx-data
+    i2c-stop
+ end
+;*******************************************************************************
+
+
+; 6) Version Summary
+;*******************************************************************************
+; Version 1:
+;    - Bit bang version of I2C
+;
+; Version 2-3 Changes:
+;    - Replaces bit bang version to USCI module on MSP430f2410;
+;    - Known buffering problem on reading (always stores extra read)
+;
+; Version 4 Changes:
+;    - Fixed receive buffering issue by adding a dummy read to clear buffer in
+;         the I2C-Stop read.
+;    - Added more comments/documentation.
+;    - Standardized comments/documentation.
+;*******************************************************************************
+

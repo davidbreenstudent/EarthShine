@@ -1,0 +1,61 @@
+;*******************************************************************************
+;**************************************
+;*** Start of RD3024_Lesson program ***
+;**************************************
+to run-once    ; every experiment should have version of this word
+               ; what it does is up to the coder
+               ; this example runs the code for ~20 minutes and stops
+  init-jlogo
+  loop [
+    if (elapsedTime >  300) [ stop ] ; stop after 100n seconds
+    receive-packet     ; get packets from app boards via one wire network
+    print (se se "|current draw| blue-text se item 7 :wp white-text "|(ADC)|)
+    screencapture    ; option to display desktop on a website
+   ]
+end
+
+to init-jlogo               ;master initialization word
+  print (se "|Starting | :project-name)  ;welcome message
+  init-ulogo                ;uLogo initialzation and boot squence
+  init-time                 ;start the elapsetime clock
+end
+
+to init-ulogo
+  stopvm        ;stop vm makes sure the board is not running
+  ul-power      ;run power up sequence
+  ul-init       ;run initialization sequence
+  ul-go         ;start experiment
+end
+
+to plot-xray
+
+   x-data "|Time_sec| :time-list
+   y-data "|Light_Lux| :p70-word00
+
+   setup-screen
+   aspect 1 2
+   box
+   title "|Counts vs. Time|
+   xlabel "|Time (sec)|
+   ylabel "|Counts|
+
+   limits 0 300 0 yupper
+   xaxis 30 150 1 true
+   yaxis 10 50 1 true
+   ptype 3
+   black
+   points
+
+   display-plot tile 1 2 1 1   ; Display newly created graph
+end
+
+
+;***********************
+;*** Data Processing ***
+;***********************
+
+to process-data-packet     ; receive-packet will run this word for every packet received
+ if (:type = 70) [
+     plot-xray
+     ]
+end

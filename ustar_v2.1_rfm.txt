@@ -1,0 +1,72 @@
+;These are the defines for the uStar-v2.1 board
+;kevin zack
+;03/13/2018
+
+
+;-----------RFM22B-------------------------------------------------------------
+define rx-ant-22 		[][bsetb p5out $40 bclrb p5out $20] 			;rx p5.6 tx p5.5
+define tx-ant-22 		[][bclrb p5out $40 bsetb p5out $20] 			;rx p5.6 tx p5.5
+define cslow-22  		[][bclrb p2out $40]								;p2.6
+define cshigh-22 		[][bsetb p2out $40]								;p2.6
+define waitfor-irq-22 	[][waituntil [not (readb p2in) and $80]]		;irq-22 p2.7 
+define no-ant-22		[][bclrb p5out $40][bclr p5out $20]
+
+
+;-----------RFM23BP------------------------------------------------------------
+define rx-ant-23 		[][bsetb p1out $80 bclrb p2out $01] 			;rx p1.7 tx p2.0
+define tx-ant-23 		[][bcrlb p1out $80 bsetb p2out $01] 			;rx p1.7 tx p2.0
+define cslow-23  		[][bclrb p1out $20] 							;p1.5
+define cshigh-23 		[][bsetb p1out 20] 								;p1.5
+define waitfor-irq-23 	[][waituntil [not (readb p1in) and $40]] 		;irq-23 p1.6
+define no-ant-23		[][bclrb p1out $80][bclr p2out $01]
+
+;-----------RFSWITCH-----------------------------------------------------------
+define vc1-on			[][bsetb p5out $10]								;p5.4
+define vc1-off			[][bclrb p5out $10]								;p5.4
+define vc2-on			[][bsetb p5out $08]								;p5.3
+define vc2-off			[][bclrb p5out $08]								;p5.3
+define rfswitch-22		[][vc1-on vc2-off] 			
+define rfswithc-23		[][vc2-on vc1-off] 		
+
+;-----------SRAM---------------------------------------------------------------
+define cslow-sram		[][bclrb p6out $04] 							;p6.2
+define cshigh-sram		[][bsetb p6out $04] 							;p6.2
+
+;-----------SDCARD-------------------------------------------------------------
+define cslow-sd			[][bclrb p3out $01] 							;p3.0
+define cshigh-sd		[][bsetb p3out $01] 							;p3.0
+
+;-----------POWER--------------------------------------------------------------
+define rfm22_shdn		[][bclrb p5out $80] 							;p5.7
+define rfm22_en			[][bsetb p5out $80] 							;p5.7
+define rfm23_shdn		[][bsetb p1out $10] 							;p1.4
+define rfm23_en			[][bclrb p1out $10] 							;p1.4
+define rail_shdn		[][bsetb p1out $08] 							;p1.3
+define rail_en			[][bclrb p1out $08] 							;p1.3
+
+;-----------LED----------------------------------------------------------------
+define blue-on			[][bsetb p2out $08] 							;p2.3
+define blue-off			[][bcrlb p2out $08] 							;P2.3
+define green-on			[][bsetb p2out $10] 							;P2.4
+define green-off		[][bcrlb p2out $10]  							;P2.4
+define red-on			[][bsetb p2out $20] 							;P2.5
+define red-off			[][bcrlb p2out $20]  							;P2.5
+define alloff  			[][bcrlb p2out $38]
+
+;
+;-----------GPS----------------------------------------------------------------
+define gps-enn			[][bsetb p5out $01] 							;p5.0
+define gps-shdnn		[][bcrlb p5out $01] 							;p5.0
+
+;-----------ADC----------------------------------------------------------------
+;A0 		p6.0
+;A1 		p6.1
+;tmp1 		p6.3
+;tmp2 		p6.4
+;unreg-cur 	p6.5
+;tmep3 		p6.6
+;bat-read 	p6.7
+
+;-----------DP-----------------------------------------------------------------
+; DP0  		p2.1
+

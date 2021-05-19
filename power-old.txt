@@ -1,0 +1,173 @@
+;ulogo file for BasicBoard
+ 
+ to ul-power
+	 init-OnBoardLeds ;prepares the IO pins that control the on board LEDs
+	 redon ;turns on the red LED
+	 wait 10 ;wait 1 second
+	 redoff ;turns off the red LED
+	 wait 10 ;wait 1 second
+	ul-init
+	ul-go
+ end
+ 
+ to ul-init
+	 yellowon ;turns on the red and green LEDs	 
+         init-OffBoardLeds ;prepares the IO pins that control the breadboard LEDs
+         wait 10 ;wait 1 second
+	 alloff ;turns off the red and green LEDs
+	 wait 10 ;wait 1 second
+ end 
+
+ to init-OffBoardLeds
+	dp3output ;makes digital pin 3 an output
+	dp3off  ;turns digital pin 3 to the off state
+        dp2output ;makes digital pin 2 an output
+        dp2off ;turns digital pin 2 to the off state
+	dp1output ;makes digital pin 3 an output
+	dp1off  ;turns digital pin 3 to the off state
+        dp0output ;makes digital pin 2 an output
+        dp0off ;turns digital pin 2 to the off state
+	dp8output
+	dp8off
+ end 
+ 
+ to ul-go
+ 	 greenon ;turn on the green LED
+	 wait 10 ;wait 1 second
+	 alloff ;turn off the green LED
+	 wait 10 ;wait 1 second
+
+	 loop ;forever loop
+	 [
+                led1on led2off
+		blueon	;turns on the blue LED
+		collect-data ;runs the data collection code
+                led1off led2on
+		blueoff ;turns off the blue LED
+	 ]
+	 ;	wait 40 ;wait 5 seconds between readings
+	 	wait 200 ;wait 20 seconds between readings
+ 
+ end
+
+to collect-data
+	init-packet 42 ;create a new packet with (arbitary) type of 42
+	packet-word readVolt 0
+	packet-word readVolt 1 
+	packet-word readVolt 2  
+	packet-word readVolt 3
+	packet-word readVolt 4
+	packet-word readVolt 5
+	packet-word readVolt 6
+	packet-word readVolt 7
+;	packet-word readVolt 8
+        packet-word 256 + 1
+	add-checksum  ; checksum is the last word in the packet
+end
+
+to selectChannel :n
+	if (:n = 0) [
+		dp3off
+		dp2off
+		dp1off
+		dp0off
+	]
+	if (:n = 1) [
+		dp3on
+		dp2off
+		dp1off
+		dp0off
+	]
+	if (:n = 2) [
+		dp3off
+		dp2on
+		dp1off
+		dp0off
+	]
+	if (:n = 3) [
+		dp3on
+		dp2on
+		dp1off
+		dp0off
+	]
+	if (:n = 4) [
+		dp3off
+		dp2off
+		dp1on
+		dp0off
+	]
+	if (:n = 5) [
+		dp3on
+		dp2off
+		dp1on
+		dp0off
+	]
+	if (:n = 6) [
+		dp3off
+		dp2on
+		dp1on
+		dp0off
+	]
+	if (:n = 7) [
+		dp3on
+		dp2on
+		dp1on
+		dp0off
+	]	
+	if (:n = 8) [
+		dp3off
+		dp2off
+		dp1off
+		dp0on
+	]
+end
+
+to readVolt :n
+	let [val 0]
+	repeat 20 [
+		selectChannel :n
+		mwait 60
+		redon ;turns on the red LED
+		make "val :val + readADC 0
+		selectChannel 5
+		mwait 60
+		redoff ;turns off the red LED
+		make "val :val - readADC 0
+	]
+	output :val + 500
+end
+
+;extra code NOT used in run-once
+
+to calibrateADC :n 
+   let [total 0] ;the total from sequential readings
+   let [sample 10] ;the number of readings to take
+   repeat :sample	
+   [
+     let [adc (readADC :n)] ;read value from ADC 
+     let [total :total + :adc] ;add that value to the total
+     print :adc ;print that value
+     wait 10 ;wait 1 second
+   ]
+   let [total :total / :sample] ;devide the total by the number of sameples to get the mean
+   prs "Average: ;print so users know final value is the average
+   print :total ;print that average value
+end
+
+to led1on
+   dp3on ;turn digital pin 3 on to power the LED
+end
+
+to led1off
+  dp3off ;turn digital pin 3 off to unpower the LED
+end
+
+to led2on
+   dp2on ;turn digital pin 2 on to power the LED
+end
+
+to led2off 
+   dp2off ;turn digital pin 2 off to unpower the LED
+end
+
+

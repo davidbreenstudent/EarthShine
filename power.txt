@@ -1,0 +1,207 @@
+;ulogo file for BasicBoard
+ 
+ to ul-power
+	 init-OnBoardLeds ;prepares the IO pins that control the on board LEDs
+	 redon ;turns on the red LED
+	 wait 10 ;wait 1 second
+	 redoff ;turns off the red LED
+	 wait 10 ;wait 1 second
+	 ul-init
+	 ul-go
+ end
+ 
+ to ul-init
+	 yellowon ;turns on the red and green LEDs	 
+         init-OffBoardLeds ;prepares the IO pins that control the breadboard LEDs
+         wait 10 ;wait 1 second
+	 alloff ;turns off the red and green LEDs
+	 wait 10 ;wait 1 second
+ end 
+
+ to init-OffBoardLeds
+	dp3output ;makes digital pin 3 an output
+	dp3off  ;turns digital pin 3 to the off state
+        dp2output ;makes digital pin 2 an output
+        dp2off ;turns digital pin 2 to the off state
+	dp1output ;makes digital pin 3 an output
+	dp1off  ;turns digital pin 3 to the off state
+        dp0output ;makes digital pin 2 an output
+        dp0off ;turns digital pin 2 to the off state
+ end 
+ 
+ to ul-go
+ 	 greenon ;turn on the green LED
+	 wait 10 ;wait 1 second
+	 alloff ;turn off the green LED
+	 wait 10 ;wait 1 second
+
+	 loop ;forever loop
+	 [
+		blueon	;turns on the blue LED
+		wait 3 ;wait 5 seconds between readings
+		blueoff ;turns off the blue LED
+		collect-data ;runs the data collection code
+	 ]
+ 
+ end
+
+to collect-data
+	init-packet 42 ;create a new packet with (arbitary) type of 42
+	packet-word readVolt 14 ;read the value of the first temp sensor
+	packet-word readVolt 15
+	packet-word readVolt 10  
+	packet-word readVolt 11
+	packet-word readVolt 0
+	packet-word readVolt 1
+	packet-word readVolt 3
+	packet-word readVolt 4
+	add-checksum  ; checksum is the last word in the packet
+end
+
+to selectChannel :n
+	if (:n = 0) [
+		dp0off
+		dp1off
+		dp2off
+		dp3off
+	]
+	if (:n = 1) [
+		dp0on
+		dp1off
+		dp2off
+		dp3off
+	]
+	if (:n = 2) [
+		dp0off
+		dp1on
+		dp2off
+		dp3off
+	]
+	if (:n = 3) [
+		dp0on
+		dp1on
+		dp2off
+		dp3off
+	]
+	if (:n = 4) [
+		dp0off
+		dp1off
+		dp2on
+		dp3off
+	]
+	if (:n = 5) [
+		dp0on
+		dp1off
+		dp2on
+		dp3off
+	]
+	if (:n = 6) [
+		dp0off
+		dp1on
+		dp2on
+		dp3off
+	]
+	if (:n = 7) [
+		dp0on
+		dp1on
+		dp2on
+		dp3off
+	]
+	if (:n = 8) [
+		dp0off
+		dp1off
+		dp2off
+		dp3on
+	]
+	if (:n = 9) [
+		dp0on
+		dp1off
+		dp2off
+		dp3on
+	]
+	if (:n = 10) [
+		dp0off
+		dp1on
+		dp2off
+		dp3on
+	]
+	if (:n = 11) [
+		dp0on
+		dp1on
+		dp2off
+		dp3on
+	]
+	if (:n = 12) [
+		dp0off
+		dp1off
+		dp2on
+		dp3on
+	]
+	if (:n = 13) [
+		dp0on
+		dp1off
+		dp2on
+		dp3on
+	]
+	if (:n = 14) [
+		dp0off
+		dp1on
+		dp2on
+		dp3on
+	]
+	if (:n = 15) [
+		dp0on
+		dp1on
+		dp2on
+		dp3on
+	]
+end
+
+to readVolt :n
+	let [val 0]
+	selectChannel :n
+	repeat 15 [
+		;redon
+		;redoff
+		wait 1
+		make "val :val + readADC 0
+
+	]
+	output :val ;read and output value of temp sensor from ADC pin 5
+
+end
+
+;extra code NOT used in run-once
+
+to calibrateADC :n 
+   let [total 0] ;the total from sequential readings
+   let [sample 10] ;the number of readings to take
+   repeat :sample	
+   [
+     let [adc (readADC :n)] ;read value from ADC 
+     let [total :total + :adc] ;add that value to the total
+     print :adc ;print that value
+     wait 10 ;wait 1 second
+   ]
+   let [total :total / :sample] ;devide the total by the number of sameples to get the mean
+   prs "Average: ;print so users know final value is the average
+   print :total ;print that average value
+end
+
+to led1on
+   dp3on ;turn digital pin 3 on to power the LED
+end
+
+to led1off
+  dp3off ;turn digital pin 3 off to unpower the LED
+end
+
+to led2on
+   dp2on ;turn digital pin 2 on to power the LED
+end
+
+to led2off 
+   dp2off ;turn digital pin 2 off to unpower the LED
+end
+
+

@@ -1,0 +1,294 @@
+;*****************************************************************************
+; Code to run SPI using USCI inherent to MSP430f2410 for uLogo Dev Board 3.5
+;
+; Written by Hunter Mills
+; Updated by Hunter Mills (Version 2 on 8/19/14)
+; Updated by Hunter Mills (Version 3 on 8/27/14)
+;
+;              >>>>> This Code Uses iopinshunterV3.txt <<<<<
+;
+;*****************************************************************************
+
+
+; Current State of the Code
+;*****************************************************************************
+; This code is currently designed to (and will only work) with the MSP430 as
+; the only master (not as slave or multi-master system). It will also work in
+; SPI 3 and 4 wire modes. In SPI 3 wire, there is no Master In / Slave Out 
+; pin.
+;
+; There is a basic initiation word. If there are any problems with using a 
+; SPI device, this word may not be correctly initiating that device. Users
+; must consult each device's datasheet for proper communication and usage, 
+; and alter the initiation word accordingly.
+;
+;               >>>>>All registers are set to USCI_B0<<<<<
+;
+;*****************************************************************************
+
+
+; Pin Outs
+;*****************************************************************************
+; All register values are correlated to USCI_B1. As is, this code will only 
+; work on the pins correlated to USCI_B1. To use other USCI blocks, all 
+; register locations will need to be altered.
+;
+;    - Chip Select                <---->       Any Un-used Digital Pin
+;    - Master Out / Slave In      <---->       Second Pin on the Right
+;    - Master In / Slave Out      <---->       Third Pin on the Right
+;    - Clock                      <---->       Fourth Pin on the Right
+;
+; In general usage, the user need not use digial pin 4 for the SPI 
+; communication. It is generally easier to use the Chip Select Operation
+; by manually truning any digiatl pin on or off.
+;
+; To determine other USCI block register locations and pin outs, consult the
+; MSP430f2410 data sheet available at:
+;    http://www.ti.com/lit/ds/symlink/msp430f233.pdf
+;*****************************************************************************
+
+
+; Breif Introduction to SPI
+;*****************************************************************************
+; SPI (Serial Peripheral Interface) is a four line syncronous communication 
+; protocol that opperates in increments of eight clock cycles.
+;
+; SPI Lines:
+;    - Chip Select (CS): This line is used to select the desired device.
+;          Devices are usually selected by setting this line low and released
+;          by setting this line high.
+;    - Master Out / Slave In (MOSI): This line is used to send commands from
+;          the master to the slave.
+;    - Master In / Slave Out (MISO): This line is used to receive responses
+;          to the master from the slave.
+;    - Clock (CLK): The master generates a clock cycle on this line, which is
+;          used to latch information.
+;
+;          >>>>> Variations on the Naming Convention Exist <<<<<
+;
+; A more in depth introduction to SPI can be found at:
+;    https://learn.sparkfun.com/tutorials/serial-peripheral-interface-spi
+;*****************************************************************************
+
+
+
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; >>>>>>>>>>>>>>>>>SPI Register Locations in MSP430f2410<<<<<<<<<<<<<<<<<<<<<<
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+;*****************************************************************************
+; Below are the locations for each USCI_B1 register as per the datasheet:
+;    http://www.ti.com/lit/ds/symlink/msp430f233.pdf
+; 
+; More information about each register, consult the MSP430 User Manual:
+;    http://www.ti.com/lit/ug/slau144j/slau144j.pdf         (Chapter 16)
+
+constants [                         ; Register ID's
+   [ UCB0TXBUF $6F ]                   ; Transmit Buffer
+   [ UCB0RXBUF $6E ]                   ; Receive Buffer
+   [ UCB0STAT $6D ]                    ; Status Register
+   [ UCB0BR1 $6B ][ UCB0BR0 $6A ]      ; Baud Rate Control
+   [ UCB0CTL1 $69 ][ UCB0CTL0 $68 ]    ; Control Registers
+   [ IFG2 $03 ]
+ 
+   [ bit0 $01 ][ bit1 $02 ][ bit2 $04 ][ bit3 $08 ]
+   [ bit4 $10 ][ bit5 $20 ][ bit6 $40 ][ bit7 $80 ]
+
+   [ p3sel $1B ][ channel1 $02 ]       ; GPIO Pins related to
+   [ channel2 $04 ][ channel3 $08 ]    ;   SPI communication
+]
+
+; Individual Bits in UCB0CTL0
+
+constants [
+   [ UCSYNC $01 ]                ; Synchronous Mode Enable (1 = Sync, 0 = Async)
+   [ UCMODE0 $02 ][ UCMODE1 $04 ]; Mode Select (00 for SPI)
+   [ UCMST $08 ]                 ; Master Select (1 = Master, 0 =  Slave)
+   [ UC7BIT $10 ]                ; Character Length (0 = 8bit, 1 = 7bit)
+   [ UCMSB $20 ]                 ; MSB Select First (1 = MSB, 0 = LSB)
+   [ UCCKPL $40 ]                ; Clock Polarity (Low = 0, High = 1)
+   [ UCCKPH $80 ]                ; Clock Phase (Latch 1st = 0, Latch 2nd = 1)
+]
+
+; Individual Bits in UCB0CTl1
+
+constants [
+   [ UCSWRST $01 ]                ; Software Reset (reset/held = 1, free = 0)
+   [ UCSSEL0 $40 ][ UCSSEL1 $80 ] ; Clock Source Select (10 for Internal Clock)
+]
+
+; Individual Bits in UCB0STAT
+
+constants [
+   [ UCBUSY $01 ]                 ; USCI Busy (0 = Not Busy, 1 = Busy)
+   [ UCOE $20 ]                   ; Overflow Error Flag
+   [ UCFE $40 ]                   ; Fragment Error Flag
+   [ UCLISTEN $80 ]               ; Listen Enable
+]
+
+; Individual Bits in IFG2
+
+constants [
+   [ UCB0RXIFG $04 ][ UCB0TXIFG $08 ] ; TX and RX Interupt Flags
+]
+;*****************************************************************************
+
+
+
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; >>>>>>>>>>>>>>>>>>>>>>>>>uLogo Word Definitions<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+; SPI Word: Basic Initiation (init-spi-basic)
+;*****************************************************************************
+; Word that initiates SPI using common settings. Initiation Must occur before
+; SPI communication begins.
+;
+; Initiation as per USCI SPI guide:
+;
+; 1) Set UCSWRST
+; 2) Set Registers (Control 0 & 1)
+; 3) Configure ports (for Slave Selection)
+; 4) Clear UCSWRST
+; 5) Enable Interupts
+;
+; This step enables USCI in SPI mode and disables the GPIOs.
+; Must be done before SPI communication.
+
+to init-spi-basic
+
+   bset UCB0CTL1 UCSWRST      ; Disable USCI
+                              
+   bset p3sel channel1        ; Disable GPIO functionality
+   bset p3sel channel2
+   bset p3sel channel3
+
+   bset UCB0CTL0 UCSYNC       ; Setting Control Registers to Common Settings
+   bclr UCB0CTL0 UCMODE0
+   bclr UCB0CTL0 UCMODE1
+   bset UCB0CTL0 UCMST
+   bclr UCB0CTL0 UC7BIT
+   bset UCB0CTL0 UCMSB
+   bclr UCB0CTL0 UCCKPL
+   bset UCB0CTL0 UCCKPH
+
+   bset UCB0CTL1 UCSSEL1
+   bclr UCB0CTL1 UCSSEL0
+
+   writeb ucb0br0 0
+   writeb ucb0br1 128
+
+   bclr UCB0CTL1 UCSWRST      ; Re-Enable USCI 
+
+end
+;*****************************************************************************
+
+
+; SPI Word: SPI Transmit and Receive (spi-txrx)
+;*****************************************************************************
+; On MSP 430, SPI transmit and receive functions happen simultaneously
+; This function both sends and receives data after chip selection.
+;
+
+to spi-TXRX :x
+
+   waituntil [ (btst ifg2 ucb0txifg) = 1 ]     ; Wait until TX is Available
+   writeb ucb0txbuf :x                         ; Write Command
+   waituntil [ (btst ifg2 ucb0rxifg) = 1 ]     ; Wait until RX is Available
+   output read UCB0RXBUF                       ; Read Response
+
+end
+;*****************************************************************************
+
+
+; SPI Word: SPI Transmit (spi-tx)
+;*****************************************************************************
+; Function to write numeric command ":x" to the slave device without reading
+; a response
+;
+
+to spi-TX :x
+
+   waituntil [ (btst ifg2 ucb0txifg) = 1 ]     ; Wait until TX is Available
+   writeb ucb0txbuf :x                         ; Write Command
+   waituntil [ (btst ifg2 ucb0rxifg) = 1 ]     ; Wait until RX is Available
+   ignore read ucb0rxbuf                       ; Read and Ignore Response
+
+end
+;*****************************************************************************
+
+
+; SPI Words: SPI Receive (spi-rx and spi-rx2)
+;*****************************************************************************
+; Words to read numeric data from the slave device.
+;
+; spi-rx keeps Master Out / Slave In held at logic low.
+; spi-rx2 keeps Master Out / Slave In held at logic high.
+
+to spi-RX
+
+   waituntil [ (btst ifg2 ucb0txifg) = 1 ]
+   writeb ucb0txbuf 0
+   waituntil [ (btst ifg2 ucb0rxifg) = 1 ]
+   output read UCB0RXBUF
+
+end 
+
+to spi-RX2
+
+   waituntil [ (btst ifg2 ucb0txifg) = 1 ]
+   writeb ucb0txbuf 255
+   waituntil [ (btst ifg2 ucb0rxifg) = 1 ]
+   output read UCB0RXBUF
+
+end 
+;*****************************************************************************
+
+
+
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>Sample SPI Code<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+;to ignore :n
+;end
+
+
+;*****************************************************************************
+; Spi Devices Vary Widely, so please take note that this is a Sample
+;
+; Begin Sample Code:
+;
+;    init-spi-basic          ; Initiation
+;
+;    dp4off                  ; Chip Selection
+;
+;    spi-tx $32              ; Transmit byte "$32"
+;
+;    print spi-rx            ; Recieve and print byte
+;
+;    dp4on                   ; Deselect Chip
+;
+; End Sample Code
+;
+; The user MUST consult each devices datasheet to determine how to tranmsit
+; and recieve information. The user may also have to consult the data sheet if
+; the basic SPI initiation is incorrect and may need to create a specialized
+; initiation word for that specific device.
+;*****************************************************************************
+
+
+; Version Notes
+;*****************************************************************************
+; Version 3 Notes:
+;    - Updated code to change what pins the SPI bus operates on (three of the
+;          buttom 4 pins / From UCB1 to UCB0).
+;
+; Version 2 Notes:
+;    - Updated/added more comments and documentation.
+;    - Bug Fix: Some Constants were pointed to the wrong register.
+;*****************************************************************************

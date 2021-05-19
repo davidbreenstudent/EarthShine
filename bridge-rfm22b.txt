@@ -1,0 +1,499 @@
+
+constants [	
+
+	  [p1dir $22][p1out $21][p1in $20]
+          [p2dir $2a][p2out $29]
+          [p3sel $1b]
+          [p4dir $1E][p4out $1D][p4in $1C][p4sel $1F]
+          [p5dir $32][p5out $31][p5in $30][p5sel $33]
+	  [p6dir $36] [p6out $35]
+          [ucb0ctl0 $68][ucb0ctl1 $69]
+
+	  [ucb0br0 $6a][ucb0br1 $6b]
+
+	  [ucb0stat $6d][ucb0rxbuf $6e][ucb0txbuf $6f]
+;          [packet $1f80][rpacket $1f00][test $1300]
+          [packet $1fc0][rpacket $1400][test $1300]
+          [command-center $380]
+          
+	  ]
+
+
+global [baud ]
+global [freqdev freq75 freq76 freq77]
+
+define vm-run      [][ output btst p1in channel0 ]
+define vm-run-init [][ bclr p1sel channel0
+                       bclr p1dir channel0 ]
+
+; In addition to this, all i/o pins must be enabled to operate 
+define dp1enable [][ bclr p5sel channel3 ]
+define dp2enable [][ bclr p5sel channel2 ]
+define dp3enable [][ bclr p5sel channel1 ]
+define dp4enable [][ bclr p5sel channel0 ]
+define dp5enable [][ bclr p4sel channel1 ]
+define dp6enable [][ bclr p4sel channel0 ]
+define dp7enable [][ bclr p3sel channel7 ]
+define dp8enable [][ bclr p3sel channel6 ]
+
+to init-pins
+
+writeb p2dir $38
+writeb p2out $00
+write adcctl0 $10
+write adcctl1 $f8
+bset adcae0 1
+bset adcctl0 2
+
+;dp4enable
+;dp4output
+;dp4on
+
+;dp5enable
+;dp5output
+dp5on   ; turn on radio power
+
+alloff
+
+end
+
+to ul-power
+         ; init-OnBoardLeds ;control the on board LEDs
+         ; redon ;turns on the red LED
+         ; wait 10 ;wait 1 second
+         ; redoff ;turns off the red LED
+         ; mwait 1000 ; wait 2 sec
+;         write $210 timestamph + 1000   ; reset after 10000s
+         ul-init
+         ul-go
+end
+
+to ul-init
+        greenon ;turns on the red and green LEDs
+        wait 10 ;wait 1 second
+        alloff ;turns off the red and green LEDs
+        wait 10 ;wait 1 second
+      msp-init
+      init-pins
+      msp-init
+end
+
+to ul-go
+      ;   greenon ;turn on the green LED
+      ;   wait 10 ;wait 1 second
+      ;   alloff ;turn off the green LED
+      ;   wait 10 ;wait 1 second
+
+init-dac
+DAC0-Write 1000
+DAC1-Write 2000
+rfm-init
+
+; setbaud 9600
+  setbaud 501
+  setfreqdev 0        ; overridden by baud rate table
+  setfreq75  0        ; regs 75 0x53, 76 0xba, 77 0xa0 set to 437.465 MHz
+  setfreq76  0
+  setfreq77  0
+
+   rfm-init
+   test-send 0
+;   test-receive 
+  receiveloop
+;  packet-loop
+;  Xpacket-loop
+; loop [test-send mwait 4000]
+end
+
+to Xpacket-loop
+let [addr1 0]
+let [addr2 0]
+let [xnum 0]
+loop [
+  greenon
+;  ustar-rl 27 $1f80 40 $1fc0
+;  ustar-rl 30 $1f80 40 $1f80
+  alloff
+;  build-packet :xnum
+  make "xnum :xnum + 1
+  blueon
+  clear-res
+  make "addr1 packet
+  make "addr2 rpacket
+  repeat 40 [
+     writeb :addr2 (readb :addr1)
+     make "addr1 :addr1 + 1
+     make "addr2 :addr2 + 1
+    ]
+  send-packet
+  setup-rx
+  alloff
+  mwait 4000
+ ]
+end
+
+to test-receive 
+    rfm-init
+;    test-send
+; mwait 1000
+   ; test-send
+   ; mwait 1000
+    setup-rx
+     loop [
+   ;   rfm-init
+   ;   setup-rx
+      if(receive-packet?)
+          [ alloff greenon save-packet setup-rx mwait 100 alloff ]
+          mwait 1000 redon mwait 1000 alloff
+     ]
+end
+
+to save-packet
+; prs |got packet|
+
+let [len rreg $4b
+     addr rpacket]
+;prh :len
+
+make "addr rpacket
+; prh rpacket
+repeat :len [writeb :addr rreg $7f make "addr :addr + 1]
+
+ ; make "addr rpacket
+ ; repeat :len [prh readb :addr
+ ;                make "addr :addr + 1
+ ;           ]
+;  prs "
+  mcpy rpacket + 2 packet 40  ; copy $1fc0 to $1f80 drop 4 bytes
+
+end
+
+to build-packet :n
+init-packet 50 
+packet-word :n
+packet-word :n + 1 
+packet-word :n + 2 
+packet-word :n + 3 
+add-checksum
+end
+
+global [lasttime xnum]
+
+to receiveloop
+let [ts -1]
+let [addr 0]
+let [node 0]
+
+rfm-init
+setup-rx
+greenoff
+setlasttime 0
+setxnum 0
+
+loop [
+  redon
+  mwait 100
+  redoff
+  mwait 100
+
+  if receive-packet? [
+  greenon
+  print-packet
+  setup-rx
+  mwait 100
+  greenoff
+
+  ]
+
+  if stray-packet? [
+    blueon
+    ;mwait 1000
+    clear-res
+    make "addr inbuf
+    repeat readb inbuf-len [fprintb readb :addr make "addr :addr + 1]
+    fprintb 0
+    send-packet
+    clear-stray
+    setup-rx
+;    mwait 500           ; wait 5 seconds for the other side to respond
+    blueoff ]
+
+  ]
+end
+
+to print-packet
+
+let [len rreg $4b
+     addr rpacket]
+; print :len
+
+make "addr rpacket
+repeat :len [writeb :addr rreg $7f make "addr :addr + 1]
+
+; make "addr rpacket
+; repeat 15 [prf "|%b | readb :addr
+;                 make "addr :addr + 1
+;            ]
+; prs "
+
+end
+
+;  also in util.txt
+;to wdchecksum :addr :len
+;let [res 0]
+;repeat :len / 2 
+; [ make "res :res + read :addr 
+;   make "addr :addr + 2]
+;output :res
+;end
+
+constants [[status $202][inbuf $300][inbuf-len $301]]
+
+define stray-packet? [] [output (readb status) and 2]
+define clear-stray [] [bclrb status 2]
+
+to test-send :cmd
+  clear-res
+  fprintb $aa
+  fprintb 5
+  fprintb $90 
+  fprintb $80
+  fprintb :cmd
+  fprintw $1234
+  fprintw $5678
+  fprintw $4321
+  fprintb 0
+  alloff
+  mwait 1000
+  blueon
+  loop [ 
+   blueon
+   send-packet
+   mwait 1000
+   blueoff
+   mwait 10000  
+  ]
+  blueoff
+end
+
+to start-beacon-cmd
+  init-cmd $F6
+  send-cmd 
+end
+
+to stop-beacon-cmd
+  init-cmd $F7
+  send-cmd 
+end
+
+to init-cmd :cmd
+  clear-res
+  fprintb :cmd
+end
+
+to send-cmd
+  alloff
+  mwait 1000
+  blueon
+  send-packet
+  blueoff
+end
+
+to fprintw :n
+  fprintb :n and $ff
+  fprintb lsh :n -8
+end
+
+to respond-ping
+  let [node readb rpacket + 4]  ; grab destination node
+  clear-res
+  fprintb $aa
+  fprintb 4
+  fprintb $80
+  fprintb :node
+  send-packet
+end
+
+to respond-rl
+  memcopy rpacket packet 50     ; maximum packet size in bytes 
+  let [node readb packet + 4]   ; grab destination node
+  let [addrl readb packet + 7]  ; grab low-byte address
+  let [addrh readb packet + 8]  ; grab high-byte address
+  let [addr :addrl + (256 * :addrh)]
+  let [len  readb packet + 9]  ; grab number of bytes to return
+
+  clear-res
+  fprintb $aa
+  fprintb :len + 4
+  fprintb $80
+  fprintb :node
+  
+  repeat :len [ fprintb readb :addr
+                make "addr :addr + 1
+              ]  
+  send-packet
+end
+
+global [ustarnode]
+
+to talkto :n
+  setustarnode :n
+end
+
+to ustar-rl :node :addr :len :dest
+ clear-res
+ fprintb $aa
+ fprintb 8
+ setustarnode :node
+ fprintb ustarnode
+ fprintb $80
+ fprintb $fe
+ fprintb :addr
+ fprintb lsh :addr -8
+ fprintb :len
+ sendpacket rpacket + 2 8
+ waituntil [ stray-packet?]
+ make "addr inbuf + 4 
+ repeat :len [ writeb :dest readb :addr
+               make "dest :dest + 1
+               make "addr :addr + 1]
+ clear-stray
+end
+
+to ustar-wl :node :dest :len :input
+ clear-res
+ fprintb $aa
+ fprintb :len + 8 
+ setustarnode :node
+ fprintb ustarnode
+ fprintb $80
+ fprintb $fd
+ fprintb :dest
+ fprintb lsh :dest -8
+ repeat :len [fprintb readb :input
+              make "input :input + 1] 
+ sendpacket rpacket + 2 :len + 8
+ clear-stray
+end
+
+to respond-wl 
+  let [node  readb (rpacket + 4)         ; grab destination node
+       addrl readb (rpacket + 7)         ; grab low-byte address
+       addrh readb (rpacket + 8)         ; grab high-byte address
+       addr :addrl + (256 * :addrh)      ; write to address
+       addrp (rpacket + 9)               ; first data byte in wl packet
+       len  ((readb (rpacket + 3)) - 7);bytes to write 7 items (aa len node 80 FD addr-lo addr-hi)
+       caddrp :addr]
+
+  ; prh :addrp
+  ; prh :addr
+  ; print :len
+  memcopy :addrp :addr :len
+
+  ; repeat :len [print readb :caddrp   make "caddrp :caddrp + 1 ]
+
+  if ( :addr = command-center ) command-center
+                     
+  ; no response to wl ?  (blind) change later ?
+   clear-res
+   fprintb $aa
+   fprintb $05
+   fprintb $80
+   fprintb :node
+   fprintb $DF 
+   send-packet
+end
+
+
+to dump :x :l
+if :l = 0 [make "l 1]
+repeat (:l + 15) / 16 [dumpline :x make "x :x + 16]
+end
+
+to dumpline :x
+prf "|%w - | :x
+repeat 16 [prf "|%b | readb :x make "x :x + 1]
+prs "
+end
+
+to readslice :addr
+repeat 16 
+ [ fprint read :addr 
+   make "addr :addr + 2 ]
+end
+
+to writeslice :addr :data
+repeat len :data
+ [ writefb :addr readb :data
+   make "addr :addr + 1
+   make "data :data + 1 ]
+prh :addr
+fprint :addr
+end
+
+to writeramslice :addr :data
+repeat len :data
+ [ writeb :addr readb :data
+   make "addr :addr + 1
+   make "data :data + 1 ]
+prh :addr
+fprint :addr
+end
+
+
+to checksum :addr :len
+let [res 0]
+repeat :len 
+ [ make "res :res + readb :addr 
+   make "addr :addr + 1]
+output :res
+end
+
+;to wdchecksum :addr :len
+;let [res 0]
+;repeat :len / 2 
+; [ make "res :res + read :addr 
+;   make "addr :addr + 2]
+;output :res
+;end
+
+to run-vector :addr
+if (readb :addr) = $ff [stop]
+call read :addr
+end
+
+; to clear-vectors
+; let [addr ram-vectors]
+; repeat 128 [write :addr $ffff make "addr :addr + 2]
+; end
+
+to memcopy :src :dst :len
+repeat :len 
+ [writeb :dst readb :src
+  make "src :src + 1 
+  make "dst :dst + 1]
+end
+
+to resetts    ; should be moved to vm.txt
+write $206 0
+write $208 0
+end
+
+; define code for morse
+to cwon
+  wreg 0x6d 0x06         ; sets power 0x07 is max
+  wreg 0x07 0x09         ; turn on cw
+end
+
+to cwoff
+  wreg 0x6d 0x00         ; set power to off
+  wreg 0x07 0x00         ; turns off cw
+end
+
+to cwonfor :n
+cwon
+mwait :n
+cwoff
+end
+
+

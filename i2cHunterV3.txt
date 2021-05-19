@@ -1,0 +1,283 @@
+; Code to run I2C using USCI built into MSP430f2410. At this
+; point the code does not support interupts, multi-master 
+; systems, and only supports the MSP430 as a Master. It does 
+; have basic error handaling that reports ther error and 
+; resets the communication bus.
+;
+; Written by Hunter Mills on 7/3/14
+;
+; A good introduction to I2C can be read at:
+;
+; https://learn.sparkfun.com/tutorials/i2c/all
+;
+; USCI stands for universal serial communication interface,
+; and is capable of handling multiple communication protocols
+; including both I2C and SPI. This is done by setting 
+; appropriate register values at appropriate times. An 
+; introduction to these concepts are outlined in the following
+; links:
+; 
+; http://tina.bu.edu/ec450s11/CourseDocuments/Materials/
+; Handouts/TI-Text-Chapt14-usi-subset-handout.pdf
+; 
+; http://tina.bu.edu/ec450s10/materials/Handouts/FamilyChapters
+; /16-USCI-SPI-slau144e.pdf
+; 
+
+; Constants as per MSP430f2410 datasheet available at:
+;
+; http://www.ti.com/lit/ds/symlink/msp430f2410.pdf
+;
+; and individual variable specifiactions at:
+;
+; http://tina.bu.edu/ec450s10/materials/Handouts/FamilyChapters
+; /16-USCI-SPI-slau144e.pdf
+;
+
+constants [                         ; Register ID's
+
+   [ p5sel $33 ][ channel1 $02 ][ channel2 $04 ]
+
+   [ UCB1TXBUF $DF ]                   ; Transmit Buffer
+   [ UCB1RXBUF $DE ]                   ; Receive Buffer
+   [ UCB1STAT $DD ]                    ; Status Register
+   [ UCB1I2CSA $17E ]                  ; I2C Slave Address
+   [ UCB1CIE $DC ]                     ; I2C Interupt Enable
+   [ UCB1BR1 $DB ][ UCB1BR0 $DA ]      ; Baud Rate Control
+   [ UCB1CTL1 $D9 ][ UCB1CTL0 $D8 ]    ; Control Registers
+   [ UCB1SA $17E ][ UCB1OA $17C ]      ; I2C Addresses
+   [ UCB1I2CIE $DC ]                   ; Interupt Enable
+   [ UC1IFG $07 ]
+
+   [ bit0 $01 ][ bit1 $02 ][ bit2 $04 ][ bit3 $08 ]
+   [ bit4 $10 ][ bit5 $20 ][ bit6 $40 ][ bit7 $80 ]
+]
+
+; Bits in UCB1CTL0
+;
+
+constants [
+   [ UCSYNC $01 ][ UCMODE0 $02 ][ UCMODE1 $04 ]
+   [ UCMST $08 ][ UCMM $20 ][ UCSLA10 $40 ]
+   [ UCA10 $80 ]
+]
+
+; Bits in UCB1CTL1
+;
+
+constants[
+   [ UCSWRST $01 ][ UCTXSTT $02 ][ UCTXSTP $04 ]
+   [ UCTXNACK $08 ][ UCTR $10 ]
+   [ UCSSEL0 $40][ UCSSEL1 $80 ]
+]
+
+; Bits in UCB1STAT
+;
+
+constants [
+   [ UCALIFG $01 ][ UCSTTIFG $02 ][ UCSTPIFG $04 ]
+   [ UCNACKIFG $08 ][ UCBBUSY $10 ][ UCGC $20 ]
+   [ UCSCLLOW $40 ]
+]
+
+; Bits in UCB2I2CIE
+;
+
+constants [
+   [ UCALIE $01 ][ UCSTTIE $02 ]
+   [ UCSTPIE $04 ][ UCNACKIE $08 ]
+]
+
+; Bits in UC1IE
+;
+
+constants [
+   [ UCB1TXIE $04 ][ UCB1TXIE $08 ]
+]
+
+; Bits in UC1IFG
+;
+
+constants [
+   [ UCB1RXIFG $04 ][ UCB1TXIFG $08 ]
+]
+
+
+; Init Step as per:
+;
+; http://tina.bu.edu/ec450s10/materials/Handouts/FamilyChapters
+; /16-USCI-SPI-slau144e.pdf
+;
+; on page 32.
+;
+; 1) Set UCSWRST
+; 2) Initialize Registers
+; 3) Initiate Ports
+; 4) Clear UCSWRST
+; 5) Enable Interupts (not done at this time)
+;
+
+to init-I2C-basic
+
+   bset UCB1CTL1 UCSWRST   ; Step 1
+
+   bset p5sel channel1     ; Step 3: Disable GPIO
+   bset p5sel channel2     ; and enable USCI
+
+   bset UCB1CTL0 UCSYNC    ; Step 2: Syncronous Communication
+   bset UCB1CTL0 UCMODE0   ; I2C Mode
+   bset UCB1CTL0 UCMODE1
+   bset UCB1CTL0 UCMST     ; Master Mode
+   bclr UCB1CTL0 UCMM      ; Single Naster
+   bclr UCB1CTL0 UCSLA10   ; 7-bit Addressing
+   bclr UCB1CTL0 UCA10
+
+   bclr UCB1CTL1 UCSSEL0   ; SM Clock Selected
+   bset UCB1CTL1 UCSSEL1
+
+   writeb ucb1br0 0	      ; ~100khz Clock Rate
+   writeb ucb1br1 11
+
+   bclr UCB1CTL1 UCSWRST   ; Step 4
+end
+
+
+; Function to cause a restart
+;
+
+to uninit-I2C
+   bset UCB1CTL1 UCSWRST
+   mwait 1
+   bclr UCB1CTL1 UCSWRST
+end
+
+
+; Below are functions to perform I2C communcation.
+; Each flows steps outlined in 
+;
+; http://tina.bu.edu/ec450s10/materials/Handouts/FamilyChapters
+; /16-USCI-SPI-slau144e.pdf
+;
+
+; Function to call a I2C device (Page 41).
+;
+; Write the Address in the appropriate register.
+; Set to transmit mode.
+; Set the Transmit Start bit.
+;
+
+to I2C-TX-Address :n
+
+   writeb UCB1I2CSA :n
+   bset UCB1CTL1 UCTR
+   bset UCB1CTL1 UCTXSTT
+
+   mwait 10
+
+   if ((btst ucb1stat ucnackifg) = 1) [
+      prs "|TX Address Not Received: Communication Aborted|
+      writeb UCB1TXBUF 0
+      i2c-stop
+   ]
+
+end
+
+
+; Function to transmit a data byte (Command) (page 41). Should
+; be used after I2C-TX-Address or after already sending a data
+; byte.
+;
+; Write command to the TX Buffer
+;
+
+to I2C-TX-Data :m
+
+   writeb UCB1TXBUF :m
+   mwait 10
+   
+   if ((btst ucb1stat ucnackifg) = 1) [
+      prs "|Data Byte Not Reveived: Communication Aborted|
+      i2c-stop
+   ]
+
+end
+
+
+; Function to read data from a I2C device (page 43).
+;
+; Write the Address in the appropriate register.
+; Set to receive mode.
+; Generate a Start condition.
+; Wait for the response to be stored in the RX Buffer.
+;
+
+to I2C-RX-Address :n
+   writeb UCB1I2CSA :n
+   bclr UCB1CTL1 UCTR
+   bset UCB1CTL1 UCTXSTT   
+
+   mwait 10
+
+   if ((btst ucb1stat ucnackifg) = 1) [
+      prs "|RX Address Not Received: Communication Aborted|
+      i2c-stop
+   ]
+
+end
+
+to I2C-RX-Data
+
+   let [ out 0 ]
+
+   make "out read UCB1RXBUF
+   mwait 10
+
+   output :out
+
+end
+
+
+; Function to generate a stop condition
+; 
+
+to I2C-Stop
+   bset ucb1ctl1 uctxstp
+end
+
+
+; Typical Flow for a generalized sensor
+;
+;    Initiate I2C
+;    Generate sensor address in transmit mode
+;    Send data byte to command what info you want
+;    Generate sensor address in receive mode
+;      output that data
+;    Generate stop condition
+;
+;   In which:
+; 
+; BEGIN init-I2C-basic --> I2C-TX-Address :n --> I2C-TX-Data :m
+; --> I2C-RX-Adress :n --> I2C-RX-Data --> I2C-Stop END
+;
+; There may also be multiple TX-Data and RX-Data steps in a row
+; to transmit or read more that 8 bits at a time.
+;
+
+; EXAMPLE:
+; 
+; Code to use I2C to get the name of the Gyroscope onboard
+; Sparkfun's 9 Degrees of Freedom Sensor Stick
+;
+
+to Print-Name-9DOF-Gyro
+    init-i2c-basic
+    i2c-tx-address 104
+    i2c-tx-data 0
+    i2c-rx-address 104
+    print i2c-rx-data
+    i2c-stop
+ end
+
+
+	
+

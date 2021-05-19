@@ -1,0 +1,135 @@
+;*******************************************************************************
+; Program: RD3024_Lesson.txt
+; Created by Ben Cunningham & Dr. Jernigan
+; Date: February 1, 2015
+; Last modified: July 2, 2015
+;
+; Purpose: (in development)
+; This lesson is designed to work with the low powered RD3024 x-ray detector 
+; and explore properties of radiation and energetic particles. The code below 
+; sets the initial state of the MSP430 and detects events pasted by the x-ray
+; detector. The following is an example of the created data packet:
+;
+;    [Replace with example results]
+;
+; Necessary Supporting Files:
+;   MeasurePulseWidth.txt
+;   common.txt
+;
+;*******************************************************************************
+
+;############
+;### Main ###
+;############
+to ul-power
+    init-OnBoardLeds ;prepares the IO pins that control the on board LEDs
+    redon ;turns on the red LED
+    wait 10 ;wait 1 second
+    redoff ;turns off the red LED
+    wait 10 ;wait 1 second
+end
+
+to ul-init
+    yellowon ;turns on the red and green LEDs
+    wait 10 ;wait 1 second
+    alloff ;turns off the red and green LEDs
+    wait 10 ;wait 1 second
+
+    RD3024-init
+    onboardLED-init
+    regulators-init
+    settsh0 0
+    settsl0 0
+end
+
+to ul-go
+    greenon ;turn on the green LED
+    wait 10 ;wait 1 second
+    alloff ;turn off the green LED
+    wait 10 ;wait 1 second
+;  let [st read timestamph]
+;  write $210 6 + :st   ; add 60 seconds to timestamph reset
+  poll-xray
+end
+
+
+;#######################
+:### Data Collection ###
+;#######################
+to poll-xray
+  let [xrl 0]     ;Count of x-rays ;with energy <200 (alt. pos count)
+  let [ttm 0]     ;Total Time that's passed since variable assignment (sec)
+  reset-time      ;(Word from adc-1)
+
+  loop [
+    let [ tf 0 ] 		;Pulse-Width Timer (final) initialized to zero
+    bclr TBCCTL0 COV
+    bclr TBCTL TBIFG
+
+    if ( btst TBCCTL0 CCI ) [ 	;Test if x-ray line is high
+      bset TBCTL TBCLR
+
+      waituntil [ not (btst TBCCTL0 CCI) ]  	;Wait until x-ray line is low
+
+      make "tf ( read tbccr0 ) 	;End of pulse-width time measurement.
+      make "xrl (:xrl + 1)      ;Bump good detection/position count
+    ]
+
+    if (time > 10) [
+      xray-packet :xrl
+      reset-time
+      make "xrl 0
+    ]
+  ]
+end
+
+
+;######################
+;### Initialization ###
+;######################
+to RD3024-init
+   init-TimerB
+end
+
+to onboardLED-init
+  init-OnBoardLeds
+end
+
+to regulators-init
+  dp2output
+  dp2off
+  dp3output
+  dp3on
+  dp8output
+  dp8off
+end
+
+;##############
+;### Packet ###;
+##############
+to xray-packet :n
+  blueon		;Indication of start
+;  init-packet 70	;(re)create
+;  fprint :n
+;  add-checksum
+
+  init-packet 70 ;create a new packet with (arbitary) type of 70
+  packet-word :n ;add counts to packet
+  packet-word readADC 7  ;total current reading for board
+  add-checksum   ;checksum is the last word in the packet
+  alloff
+end
+
+
+;############
+;### Time ###
+;############
+to reset-time
+  settsh0 timestamph  ;timestanh increments each 10 seconds
+  settsl0 timestampl  ;timestampl increments each 1 milli-seconds
+		      ;  (0 - 9999) 9999 becomes 0 after 10 seconds
+end
+
+to time
+  output (10 * (timestamph - tsh0)) + ((timestampl - tsl0) / 1000)
+end

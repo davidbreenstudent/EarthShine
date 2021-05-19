@@ -1,0 +1,243 @@
+
+constants [	
+
+	  [p1dir $22][p1out $21][p1in $20]
+          [p2dir $2a][p2out $29]
+          [p3sel $1b]
+          [p4dir $1E][p4out $1D][p4in $1C][p4sel $1F]
+          [p5dir $32][p5out $31][p5in $30][p5sel $33]
+	  [p6dir $36] [p6out $35]
+          [ucb0ctl0 $68][ucb0ctl1 $69]
+
+	  [ucb0br0 $6a][ucb0br1 $6b]
+
+	  [ucb0stat $6d][ucb0rxbuf $6e][ucb0txbuf $6f]
+          [packet $1f80][rpacket $1fc0]
+          
+	  ]
+
+
+global [baud ]
+global [freqdev freq75 freq76 freq77]
+
+define vm-run      [][ output btst p1in channel0 ]
+define vm-run-init [][ bclr p1sel channel0
+                       bclr p1dir channel0 ]
+
+; In addition to this, all i/o pins must be enabled to operate 
+define dp1enable [][ bclr p5sel channel3 ]
+define dp2enable [][ bclr p5sel channel2 ]
+define dp3enable [][ bclr p5sel channel1 ]
+define dp4enable [][ bclr p5sel channel0 ]
+define dp5enable [][ bclr p4sel channel1 ]
+define dp6enable [][ bclr p4sel channel0 ]
+define dp7enable [][ bclr p3sel channel7 ]
+define dp8enable [][ bclr p3sel channel6 ]
+
+to init-pins
+
+writeb p2dir $38
+writeb p2out $00
+write adcctl0 $10
+write adcctl1 $f8
+bset adcae0 1
+bset adcctl0 2
+
+dp4enable
+dp4output
+dp4off
+alloff
+
+end
+
+ to ul-power
+         init-OnBoardLeds ;prepares the IO pins that control the on board LEDs
+         redon ;turns on the red LED
+         wait 10 ;wait 1 second
+         redoff ;turns off the red LED
+         wait 10 ;wait 1 second
+         ul-init
+         ul-go
+ end
+
+ to ul-init
+         yellowon ;turns on the red and green LEDs
+         wait 10 ;wait 1 second
+         alloff ;turns off the red and green LEDs
+         wait 10 ;wait 1 second
+      msp-init
+      init-pins
+      msp-init
+ end
+
+to ul-go
+         greenon ;turn on the green LED
+         wait 10 ;wait 1 second
+         alloff ;turn off the green LED
+         wait 10 ;wait 1 second
+
+;         receiveloop
+         packet-loop
+end
+
+to do_onstart
+; setbaud 501
+ setbaud 9600
+setfreqdev 0        ; overridden by baud rate table
+setfreq75  0        ; regs 75 0x53, 76 0xba, 77 0xa0 set to 437.465 MHz
+setfreq76  0
+setfreq77  0
+rfm-init
+end
+
+to do_mainloop
+  let [ts -1]
+  setup-rx
+        
+  loop [
+ if receive-packet? [process-packet]
+ ]
+end
+
+to print-packet
+; prs |got packet|
+
+let [len rreg $4b
+     addr rpacket]
+; print :len
+
+make "addr rpacket
+
+repeat :len [writeb :addr rreg $7f make "addr :addr + 1]
+
+;make "addr packet
+;repeat :len [prf "|%b | readb :addr
+;                 make "addr :addr + 1
+;                 mwait 200
+;            ]
+;prs "\n
+
+; clear-res
+; prs |after clear-res|
+; if (readb packet) = 82 [ fprint read bumpcount fprint timestamph fprint timestampl]
+; if (readb packet) = 82 packet + 1
+; fprint 888        ; simulate a flag 888
+; respond
+
+end
+
+;to wdchecksum :addr :len
+;let [res 0]
+;repeat :len / 2 
+; [ make "res :res + read :addr 
+;   make "addr :addr + 2]
+;output :res
+;end
+
+;to fprintb :n
+;let [cnt readb rpacket]      ; ignore type just use length
+;writeb rpacket + :cnt + 2 :n
+;writeb rpacket :cnt + 1
+;end
+
+to test-send
+  clear-res
+  fprintb $aa
+  fprintb 5
+  fprintb 17
+  fprintb $80
+  fprintb $f9
+  fprintb 0
+  send-packet
+end
+
+constants [[status $202][inbuf $300][inbuf-len $301]]
+define stray-packet? [] [output (readb status) and 2]
+define clear-stray [] [bclrb status 2]
+
+to test-loop
+ let [addr 0]
+  setup-rx
+  loop 
+  [ if stray-packet? [
+    redon
+    clear-res
+    make "addr inbuf
+    repeat readb inbuf-len [fprintb readb :addr make "addr :addr + 1]
+    fprintb 0
+    send-packet
+    clear-stray
+    setup-rx
+    redoff ] 
+  ]
+end
+
+to packet-loop
+  let [addr 0]
+  do_onstart
+  setup-rx
+  alloff
+loop [
+  redon
+  mwait 100
+  redoff
+  mwait 100
+;  mwait 10000  ; wait an extra 10 sec to slow loop power save
+  if receive-packet? [
+  greenon
+  print-packet
+  setup-rx
+  ;ignore rreg $03      ; Read Interrupt status1 register
+  mwait 30
+;  if (read rpacket = 12816) [mcpy rpacket packet 40]  ; copy $1fc0 to $1f80
+  mcpy rpacket packet 40  ; copy $1fc0 to $1f80
+  mwait 100
+  greenoff
+  ;ignore rreg $04
+  ]
+  if (vm-run = 0) [redon stop]
+ ]
+end
+
+to receiveloop
+let [ts -1]
+let [addr 0]
+do_onstart
+setup-rx
+greenoff
+loop [
+  redon
+  mwait 100
+  redoff
+  mwait 100
+;  mwait 10000  ; wait an extra 10 sec to slow loop power save
+  if receive-packet? [
+  greenon
+  print-packet
+  sendpacket rpacket + 2  readb rpacket + 3          ; send one-wire packet
+  setup-rx
+  ;ignore rreg $03      ; Read Interrupt status1 register
+;  if (read rpacket = 12816) [mcpy rpacket packet 40]  ; copy $1fc0 to $1f80
+  mwait 100
+  greenoff
+  ;ignore rreg $04
+  ]
+  if stray-packet? [
+    blueon
+; mwait 1000
+    clear-res
+    make "addr inbuf
+    repeat readb inbuf-len [fprintb readb :addr make "addr :addr + 1]
+    fprintb 0
+    redoff
+    send-packet        ; send packet over RFM22b
+ ;   mwait 5000         ; slow down heatbeat packets
+    redon
+    clear-stray
+    setup-rx
+;    mwait 500          ;wait 0.5 seconds for the other side to respond
+    blueoff ]
+    if (vm-run = 0) [redon stop]
+  ]
+end
+

@@ -1,0 +1,263 @@
+;jlogo file for BasicBoard
+to power ; this can do anything that you want
+  run-forever ; choose to run "run-once" forever (could be any user choice)
+end
+
+to run-once    ; every experiment should have version of this word
+               ; what it does is up to the coder
+               ; this example runs the code for ~20 minutes and stops
+  init-jlogo
+  loop [
+    if (elapsedTime >  10800) [ stop ] ; stop after ~5 minutes
+    receive-packet     ; get packets from app boards via one wire network
+    wait 20       ; wait ~100 one tenth seconds or ~10 seconds           
+    ;screencapture    ; option to display desktop on a website
+   ]
+end
+
+to init-jlogo               ;master initialization word
+  print (se "|Starting | :project-name)  ;welcome message
+  init-Calibration          ;calibrate temperature sensors
+  init-time                 ;start the elapsetime clock
+  init-ulogo                ;uLogo initialzation and boot squence
+end
+
+to Xinit-Calibration 
+	make "Volt_cal [500 0 30105 3.36]
+	make "Current_cal [ 0 0 1.37 85]
+end
+
+to init-ulogo
+  stopvm        ;stop vm makes sure the board is not running
+  ul-power      ;run power up sequence
+  ul-init       ;run initialization sequence
+  ul-go         ;start experiment
+end 
+
+to Xprocess-data-packet     ; receive-packet will run this word for every packet received
+	if (:type = 42) [
+	calibrate-all-lists
+	make "powerIn-list []
+	make "powerInLoss-list []
+	make "powerOut-list []
+	make "powerOutLoss-list []
+
+	dotimes [ i count :Sol-list ] [
+		make "Volts (nth :i :Sol-list)
+		make "Current (nth :i :SolI-list)
+		make "powerIn-list (se :powerIn-list (:Volts * :Current)
+	]
+	dotimes [ i count :Batt-list ] [
+		make "Volts (nth :i :ABatt-list)
+		make "Current (nth :i :BattI-list)
+		make "powerOut-list (se :powerOut-list (:Volts * :Current)
+	]
+	dotimes [ i count :Sol-list ] [
+		make "Volts ((nth :i :Sol-list) - (nth :i :Batt-list))
+		make "Current (nth :i :SolI-list)
+		make "powerInLoss-list (se :powerInLoss-list (:Volts * :Current))
+	]
+	dotimes [ i count :Batt-list ] [
+		make "Volts ((nth :i :Batt-list) - (nth :i :ABatt-list))
+		make "Current (nth :i :BattI-list)
+		make "powerOutLoss-list (se :powerOutLoss-list (:Volts * :Current)
+	]
+
+	print-all
+	display-all ; display all plots
+	]
+end
+
+
+to calibrate-all-lists
+	calibrate-list "Sol-list :p42-word08 :Volt_cal
+	calibrate-list "SolI :p42-word07 :Volt_cal
+	calibrate-list "SolI-list :SolI :Current_cal
+	calibrate-list "ABatt-list :p42-word03 :Volt_cal
+	calibrate-list "Batt-list :p42-word04 :Volt_cal
+	calibrate-list "BattI :p42-word02 :Volt_cal
+	calibrate-list "BattI-list :BattI :Current_cal
+	calibrate-list "GND-list :p42-word05 :Volt_cal
+	calibrate-list "3v3-list :p42-word06 :Volt_cal
+	calibrate-list "CapTime-list :p42-word00 :Volt_cal
+	calibrate-list "Pow-list :p42-word01 :Volt_cal
+end
+
+to print-all
+	make "pr-time  (se "|time|     last :time-list) 
+	make "pr-AfterBatt (se "|AfterBatt:| blue-text two-digit last :ABatt-list white-text)
+	make "pr-Timer (se "|Cap Timer:| blue-text two-digit last :CapTime-list white-text)
+	make "pr-Sol (se "|Sol:| blue-text two-digit last :Sol-list white-text)
+	make "pr-SolI (se "|SolI:| blue-text two-digit last :SolI-list white-text)
+	make "pr-Pow (se "|POW:| blue-text two-digit last :Pow-list white-text)
+	make "pr-Batt (se "|Batt:| blue-text two-digit last :Batt-list white-text)
+	make "pr-BattI (se "|BattI:| blue-text two-digit last :BattI-list white-text)
+	print (se :pr-time :pr-AfterBatt :pr-Timer :pr-Sol :pr-SolI :pr-Pow :pr-Batt :pr-BattI white-text)
+	let [powerloss 0]
+	if ((last :powerInLoss-list) > 0) [
+		make "powerloss (:powerloss + (last :powerInLoss-list))
+	]
+	if ((last :powerOutLoss-list) > 0) [
+		make "powerloss (:powerloss + (last :powerOutLoss-list))
+	]
+	make "pr-PLoss (se "|Power Loss:| blue-text two-digit :powerloss white-text)
+	make "pr-PIn (se "|Power In:| blue-text two-digit (last :powerIn-list) white-text)
+	make "pr-POut (se "|Power Out:| blue-text two-digit (last :powerOut-list) white-text)
+	print (se :pr-PIn :pr-POut :pr-PLoss)
+end
+
+to plot-volt
+	aspect 1 2
+	x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+	y-data "|milliWatts|   :powerIn-list
+	Power-plot  
+	display-plot        tile 1 2 1 1
+end
+
+to Power-plot
+	setup-screen
+	select-all
+	limits 0 10800 0 700
+	box
+	xaxis 6 24 1 true
+	yaxis  7 42 1 true
+	xlabel :xname
+	ylabel :yname
+	yellow ptype 2 points
+	y-data "|Watts|   :powerOut-list
+	green ptype 3 points 
+	y-data "|Watts|   :powerInLoss-list
+	magenta ptype 3 points 
+	y-data "|Watts|   :powerOutLoss-list
+	red ptype 3 points 
+end
+
+to display-all
+   	plot-volt
+end
+
+
+
+to init-Calibration 
+	make "Volt_cal [7500 0 31090 3.3]
+	make "Current_cal [0 0 14520 100]
+end
+
+to process-data-packet     ; receive-packet will run this word for every packet received
+
+ if (:type = 42) [
+        print (se "|type | :type)
+	calibrate-list "Sol1V-list :p42-word00 :Volt_cal
+	calibrate-list "Sol1I-list :p42-word01 :Current_cal
+	calibrate-list "Sol2V-list :p42-word02 :Volt_cal
+	calibrate-list "Sol2I-list :p42-word03 :Current_cal
+	calibrate-list "BattV-list :p42-word04 :Volt_cal
+	calibrate-list "BattI-list :p42-word05 :Current_cal
+	calibrate-list "Timer-list :p42-word06 :Volt_cal
+	calibrate-list "3V3-list :p42-word07 :Volt_cal
+
+	make "SolP1-list[]
+	dotimes [i count :Sol1V-list] [
+		make "SolP1-list (se :SolP1-list ((nth :i :Sol1V-list) * (nth :i :Sol1I-list))
+	]
+	make "SolP2-list[]
+	dotimes [i count :Sol2V-list] [
+		make "SolP2-list (se :SolP2-list ((nth :i :Sol2V-list) * (nth :i :Sol2I-list))
+	]
+	make "BattPin-list[]
+	dotimes [i count :BattV-list] [
+		make "BattPin-list (se :BattPin-list ((nth :i :BattV-list) * (nth :i :BattI-list))
+	]
+
+	make "per-lost (100 * ((last :SolP1-list) - (last :BattPin-list))/(last :SolP1-list))
+
+	make "pr-time  (se "|Time|     last :time-list) 
+	make "pr-Sol1V (se "|Sol1V:| blue-text last :Sol1V-list white-text)
+	make "pr-Sol1I (se "|Sol1I:| blue-text last :Sol1I-list white-text)
+	make "pr-Sol2V (se "|Sol2V:| blue-text last :Sol2V-list white-text)
+	make "pr-Sol2I (se "|Sol2I:| blue-text last :Sol2I-list white-text)
+	make "pr-BattV (se "|BattV:| blue-text last :BattV-list white-text)
+	make "pr-BattI (se "|BattI:| blue-text last :BattI-list white-text)
+	make "pr-Timer (se "|Timer:| blue-text last :Timer-list white-text)
+	make "pr-3V3 (se "|3V3:| blue-text last :3V3-list white-text)
+	make "pr-SolP1 (se "|Sol1P:| blue-text last :SolP1-list white-text)
+	make "pr-SolP2 (se "|Sol2P:| blue-text last :SolP2-list white-text)
+	make "pr-BattPin (se "|BattPin:| blue-text last :BattPin-list white-text)
+	make "pr-Pin-lost (se "|PinLoss:| blue-text :per-lost white-text)
+	print (se :pr-time :pr-Sol1V :pr-Sol1I :pr-Sol2V :pr-Sol2I :pr-BattV :pr-BattI :pr-Timer :pr-3V3 :pr-SolP1 :pr-SolP2 :pr-BattPin :pr-Pin-lost white-text )
+
+ 	display-all      ; display all plots
+ ]
+end
+
+to Power-plot
+   aspect 1 2
+   x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+   y-data "|Power|   :SolP1-list ;ydata is light
+   setup-screen
+   select-all
+   limits 0 7200 0 1000
+   box
+   xaxis 4 120 1 true
+   yaxis  10 60 1 true
+   yellow ptype 2 points
+   xlabel :xname
+   ylabel :yname
+   y-data "|Power|   :SolP2-list ;ydata is light
+   yellow ptype 2 points 
+   y-data "|Power|   :BattPin-list
+   red ptype 2 points 
+   display-plot        tile 1 2 1 1
+end
+
+to Current-plot
+  aspect 2 2
+  x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+  y-data "|Current|   :Sol1I-list ;ydata is light
+  setup-screen
+  select-all
+  limits 0 7200 0 200
+  box
+  xaxis 6 360 1 true
+  yaxis  5 30 1 true
+  yellow ptype 2 points
+  xlabel :xname
+  ylabel :yname
+  y-data "|Current|   :BattI-list
+  blue ptype 2 points 
+  y-data "|Current|   :Sol2I-list
+  red ptype 3 points 
+  display-plot        tile 2 2 1 2
+end
+
+to display-all
+   Current-plot
+   Power-Plot
+   Voltage-plot
+end
+
+to Voltage-plot
+  aspect 2 2
+  x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+  y-data "|Volts|   :Sol1V-list ;ydata is light
+  setup-screen
+  select-all
+  limits 0 7200 0 6
+  box
+  xaxis 4 120 1 true
+  yaxis  6 36 1 true
+  yellow ptype 2 points
+  xlabel :xname
+  ylabel :yname
+  y-data "|Volts|   :BattV-list
+  red ptype 1 points 
+  y-data "|Volts|   :Sol2V-list
+  blue ptype 3 points 
+  y-data "|Volts|   :3V3-list
+  green ptype 3 points 
+  y-data "|Volts|   :Timer-list
+  cyan ptype 3 points 
+  display-plot        tile 2 2 2 2
+end
+
+

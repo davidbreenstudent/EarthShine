@@ -1,0 +1,235 @@
+;ulogo file for BasicBoard
+ 
+to ul-power
+	 init-OnBoardLeds ;prepares the IO pins that control the on board LEDs
+	 redon ;turns on the red LED
+	 wait 10 ;wait 1 second
+	 redoff ;turns off the red LED
+	 wait 10 ;wait 1 second
+end
+ 
+to ul-init
+	 yellowon ;turns on the red and green LEDs	 
+         wait 10 ;wait 1 second
+	 dp3output
+	 dp2output
+	 dp1output
+	 dp0output
+	 dp7output
+	dp7on
+	wait 10
+
+	 setup-SI1145 0
+	 setup-SI1145 0
+	 setup-SI1145 1
+	 setup-SI1145 1
+
+	 alloff ;turns off the red and green LEDs
+	 wait 10 ;wait 1 second
+end 
+
+to ul-go
+ 	 greenon ;turn on the green LED
+	 wait 10 ;wait 1 second
+	 alloff ;turn off the green LED
+	 wait 10 ;wait 1 second
+
+	 loop ;forever loop
+	 [   
+		blueon	;turns on the blue LED
+		setup-SI1145 0
+		setup-SI1145 0
+		setup-SI1145 1
+		setup-SI1145 1
+;		setup-SI1145 2
+;		setup-SI1145 2
+;		setup-SI1145 3
+;		setup-SI1145 3
+;		setup-SI1145 4
+;		setup-SI1145 4
+;		setup-SI1145 5
+;		setup-SI1145 5
+;		setup-SI1145 6
+;		setup-SI1145 6
+;		setup-SI1145 7
+;		setup-SI1145 7
+		collect-data ;runs the data collection code
+		blueoff ;turns off the blue LED
+	 	;wait 10 ;wait 5 seconds between readings
+	 ]
+       
+end
+
+to collect-data
+	redon
+	init-packet 42 ;create a new packet with (arbitary) type of 42
+	packet-word read-val-SI1145 0
+	packet-word read-val-SI1145 1
+	packet-word read-val-SI1145 2
+	packet-word read-val-SI1145 3
+	packet-word read-val-SI1145 4
+	packet-word read-val-SI1145 5
+	packet-word read-val-SI1145 6
+	packet-word read-val-SI1145 7
+	packet-word readTempSensor 
+	add-checksum  ; checksum is the last word in the packet
+	redoff
+	let [val 0]
+	make "val (read-val-SI1145 0)
+	if :val = 00000 [
+		dp7off
+		greenon
+		wait 2
+		dp7on
+		greenoff
+	]
+end
+
+to sensor-select :n
+	if :n = 0 [
+		dp0off
+		dp1off
+		dp2off
+		dp3off
+   ]
+	if :n = 1 [
+		dp0on
+		dp1off
+		dp2off
+		dp3off
+   ]
+	if :n = 2 [
+		dp0off
+		dp1on
+		dp2off
+		dp3off
+   ]
+	if :n = 3 [
+		dp0on
+		dp1on
+		dp2off
+		dp3off
+   ]
+	if :n = 4 [
+		dp0off
+		dp1off
+		dp2on
+		dp3off
+   ]
+	if :n = 5 [
+		dp0on
+		dp1off
+		dp2on
+		dp3off
+   ]
+	if :n = 6 [
+		dp0off
+		dp1on
+		dp2on
+		dp3off
+   ]
+	if :n = 7 [
+		dp0on
+		dp1on
+		dp2on
+		dp3off
+   ]
+	if :n = 8 [
+		dp0off
+		dp1off
+		dp2off
+		dp3on
+   ]
+end
+
+to read-val-SI1145 :n
+	sensor-select :n
+	let [val 0]
+	make "val read-IR-Low
+	make "val :val + (256 * read-IR-High)
+	output :val
+end
+
+to read-IR-Low
+	let [val 0]
+	init-I2C-basic
+	make "val readSI1145 $24 ;register where IR low byte is
+	output :val  
+end
+
+to read-IR-High 
+	let [val 0]
+	init-I2C-basic
+	make "val readSI1145 $25 ;register where IR high byte is
+	output :val  
+end
+
+to setup-SI1145 :n
+	sensor-select :n
+	init-I2C-basic
+	writeSI1145 $03 $00 ;
+	writeSI1145 $04 $00 ;
+	writeSI1145 $05 $00 ;
+	writeSI1145 $06 $00 ; Clear These Registers
+
+	writeSI1145 $07 $17 ; Turn on Sensor
+	writeSI1145 $08 $00 ; Clear Sensor
+
+	writeSI1145 $09 $01 ;
+	writeSI1145 $21 $FF ;
+
+	writeSI1145 $17 $F0 ; Value to enable IR
+	writeSI1145 $18 $00 ;
+	mwait 4
+	writeSI1145 $18 $A1 ; Send value of 17 to hidden
+	mwait 4             ; register
+
+	writeSI1145 $17 $04 ; Value to increase integration time
+	writeSI1145 $18 $00
+	mwait 4
+	writeSI1145 $18 $BE ; Send value of 17 to hidden
+	mwait 4		    ; register
+
+	writeSI1145 $18 $0F ; Begin Autoscan
+end
+
+to writeSI1145 :m :n	   ; Writes the value n in
+	I2C-TX-Address $60 ; register m
+	I2C-TX-Data :m
+	I2C-TX-Data :n
+	I2C-Stop
+end
+
+to readSI1145 :n	   ; Reads from register n
+	let [val 0]
+	I2C-TX-Address $60
+	I2C-TX-Data :n
+	I2C-RX-Address $60
+	make "val i2c-rx-data
+	I2C-Stop
+	output :val
+end
+
+to readTempSensor
+	output readADC 4 ;read and output value of temp sensor from ADC pin 4
+end
+
+;extra code NOT used in run-once
+
+to calibrateADC :n 
+	let [total 0] ;the total from sequential readings
+	let [sample 10] ;the number of readings to take
+	repeat :sample	
+	[
+		let [adc (readADC :n)] ;read value from ADC 
+		let [total :total + :adc] ;add that value to the total
+		print :adc ;print that value
+		wait 10 ;wait 1 second
+	]
+	let [total :total / :sample];divide the total by the # of samples
+	prs "Average: ;print so users know final value is the average
+	print :total ;print that average value
+end
+
+
+

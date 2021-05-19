@@ -1,0 +1,380 @@
+; FLIGHT_FT.txt
+; Last Revision: Sean McNeil (August 30, 2013)
+; modifications for flight environent jgj (Sep 2, 2013)
+
+; Contains routines intended for analyzing magnetometer data using a simple Fourier
+; Transform algorithm.  Algorithm goes as follows:
+; 1. Sum the product of magnetometer data at time(t) and the function sin(wt) with frequency(w).
+; 2. Sum the product of magnetometer data at time(t) and the function cos(wt) with frequency(w).
+; 3. Add the square of the two sums in steps 1 & 2 to obtain power density.
+; 4. Repeat steps 1-3 for all frequency(w) to obtain transformed function in frequency domain. 
+
+; Declaration of constants below
+constants [ 
+	[ram_addr0  $1300] 
+	[max_mem_addr $1900] 
+]
+; Declaration of global variables below
+global [
+	error 
+	x y x0 y0 d d1 d2 addrx1 addrx2 c1 c2 s_r f0 f1 axis saveaxis arr_size arr_num
+	sin_data mag_data pd_data
+;	sum_sin_data sum_cos_data
+        sum_sin sum_cos buf
+	pd peak1 peak2 peak1_pd peak2_pd tstarth tstartl m_avg solarsc pscale
+	fact
+        pd_lrg									;NEW CODE pd -> pd_lrg for numbers > 32,767 (must make pd_display unsigned ints)
+]
+;________________________________________________________________________________________
+
+to default_setup
+; Routine sets default values for variables storing program parameters
+; The user is free to modify values set for each variable using set"variable" command
+
+	setarr_size $100 	        ; size of data arrays 
+	setbuf $00			; size of buffer between data arrays
+	setx0 256			; initial x value for the Minsky circle algorithm (mcircle)
+	sety0 0				; initial y value for the Minsky circle algorithm (mcircle)
+	setc1 13			; numerator of constant in Minsky circle algorithm (mcircle)
+	setc2 252			; denominator of constant in Minsky circle algorithm (mcircle)
+	setd1 3				; factor used in Fourier Transform algorithm (ft_algorithm)
+	setd2 2			        ; factor used in Fourier Transform algorithm (ft_algorithm)
+        setpscale 5			; factor used to estimate interpolated period (period)
+	sets_r 250			; sample rate of magnetometer sampling msec
+	setaxis 2			; magnetometer axis (1:x-axis 2:y-axis 3:z-axis)
+        setsaveaxis 1			; run through all choices
+	setf0 1				; minimum frequency "searched" by Fourier Transform algorithm
+	setf1 64			; maximum frequency "searched" by Fourier Transform algorithm
+	allocate_mem_addr	        ; routine allocates memory addresses
+	setfact 1
+
+        setsolarsc 128                  ; typical voltage 4000 becomes 8 which is typical magnetometer reading
+end
+;________________________________________________________________________________________
+to flight_write_mag
+; Routine writes magnetometer data to array (mag_data)
+; Sampling rate set by "s_r"
+; magnetometer sampled axis set by "axis"
+
+	flight_init_ft
+
+	let [i 0]
+	let [tmp 0]
+        let [fake1 0]
+        let [fake2 0]
+
+	mwait 1000
+        settstarth timestamph                           ; record starting time
+        settstartl timestampl							
+	repeat (arr_size / 2) [
+		resett                                      ; start timer
+		if (axis = 0) [
+			make "fake1 read (sin_data + ((3 * :i) % arr_size))
+			make "fake1 :fake1 / 20
+			make "fake2 read (sin_data + (( 85 * :i / 10) % arr_size))
+			make "fake2 :fake2 / 40
+			make "tmp :fake1 ; + :fake2
+		]
+		if (axis = 1) [make "tmp ((readMag axis) / 10)]		; why is this necessary to repeat (extend brackets of "if" to limit to ints between 1 and 3)
+		if (axis = 2) [make "tmp readMag axis]
+		if (axis = 3) [make "tmp readMag axis]
+
+
+		write (mag_data + :i) :tmp		; store magnetometer data in mag_data array
+		make "i :i + 2
+
+		waituntil [timer > (s_r - 1)]		; wait until time for next sample
+	]
+	mag_avg				; Subtract the average for magnetometer data points
+	write_pd			; Calculate and store power densities
+end
+;________________________________________________________________________________________
+to flight_init_ft 
+; Routine initializes processer and magnetometer and generates sine wave data 
+; using minsky circle algorithm 
+; User only has to run routine once every power cycle
+
+	default_setup 		        ; Set default variables 
+;	msp-init			; Initialize processer
+	mwait 1000			; Wait a second
+	write_sin			; Generate sine waves
+        setpeak1 0
+        setpeak1_pd 0
+        setpeak2 0
+        setpeak2_pd 0
+end
+;________________________________________________________________________________________
+to flight_ft
+
+; Routine writes 256 bytes of magnetometer data to ram memory (mag_data) array
+; Fourier Transform routine checks for peaks with frequencies between "f0" and "f2"
+; Frequency of the largest and precession peaks are stored in variables "peak1" and "peak2"
+; Power densities are stored in "peak1_pd" and "peak2_pd"
+; DONT FORGET TO RUN "flight_init_ft" routine
+	
+	redon	
+	flight_write_mag	; Take magnetometer data
+	redoff
+	ft f0 f1		; Find frequencies of peaks
+	
+
+;	ft (peak1 - 2) (peak1 + 2 )   ; f0/f1 --> new f0/f1 for "flight_write_mag"
+
+
+;	print peak1		; Output period of highest peak in msec
+;	print peak1_pd		; Output power density of highest peak
+;	print peak2		; Output period of precession peak im msec
+;	print peak2_pd		; Output power density of precession peak
+end
+;________________________________________________________________________________________
+to allocate_mem_addr
+; Routine sets memory addresses for each array in RAM.
+; Set error flag(error) if address is greater than 4KB maximum.
+; Each array contains 256 bytes
+; Data addresses for arrays are shown below:
+; 1. globals start at $210
+; 2. stack starts at $2F0
+; 3. sin_data starts at $400
+; 4. mag_data starts at $500
+; 5. pd_data starts at $600
+; 6. sum_sin_data starts at $700
+; 7. sum_cos_data starts at $800
+; last address block at $900
+
+	let [tmp ram_addr0]
+
+	seterror 0
+	ifelse (:tmp < max_mem_addr) 
+		[setsin_data :tmp] 
+		[seterror 1]
+	make "tmp :tmp + arr_size		
+	ifelse (:tmp < max_mem_addr) 
+		[setmag_data :tmp] 
+		[seterror 1]
+	make "tmp :tmp + arr_size
+	ifelse (:tmp < max_mem_addr) 
+		[setpd_data :tmp] 
+		[seterror 1]
+	make "tmp :tmp + arr_size
+;	ifelse (:tmp < max_mem_addr) 
+;		[setpd_data_lrg :tmp] 
+;		[seterror 1]
+;	make "tmp :tmp + arr_size
+
+	ifelse (:tmp < max_mem_addr) [	
+		init_array sin_data arr_size
+		init_array mag_data arr_size
+		init_array pd_data arr_size
+;		init_array pd_data_lrg arr_size
+	] 
+	[
+		seterror 1
+	]
+end
+;________________________________________________________________________________________
+to init_array :array :n
+; Nulls out n memory blocks in an array with starting address given by the input (array)
+
+	let [i 0]
+
+	repeat :n [
+		write (:array + :i) 0
+		make "i :i + 2
+	]
+end
+;________________________________________________________________________________________
+to mcircle :step1 :step2
+; Routine calculates sine(y) and cosine(x) values using Minsky circle algorithm
+; Use routine in loop with x initially 0 and y the radius of the circle
+; For complete revolution in 128 steps set step1=13 and step2=252
+; REMINDER: DON'T FORGET TO INITIALIZE SINE AND COSINE VALUES
+
+	sety y + ((:step1 * x) / :step2)
+	setx x - ((:step1 * y) / :step2)
+end
+;________________________________________________________________________________________
+to write_sin
+; Routine writes 16bit integers into sin_data array stored in RAM memory as 8bit blocks
+; Data array contains integer values approximately equal to 256*sin(wt) with w=1/128 
+; For cosine values offset address by 64 bytes
+
+	setx x0
+	sety y0
+	let [i 0]
+
+	repeat (arr_size / 2) [
+		write (sin_data + :i) y 
+		mcircle c1 c2
+		make "i :i + 2
+	]
+end
+;________________________________________________________________________________________
+to mag_avg 
+; Routine calculates the average of the magnetometer data array (mag_data)
+; then shifts each data point by the average.
+
+	let [sum 0]
+	let [mag1 0]
+	let [i 0]
+	let [tmp 0]
+
+	make "mag1 (read (mag_data + 6))                              ; read third point
+	repeat (arr_size / 2) [
+		make "sum :sum + ((read (mag_data + :i)) - :mag1)
+		make "i :i + 2
+	]
+	setm_avg (:sum / (arr_size / 2)) + :mag1
+	make "i 0
+	make "tmp 0
+	repeat (arr_size / 2) [
+		make "tmp (read (mag_data + :i))
+		make "tmp :tmp - m_avg
+		write (mag_data + :i) :tmp
+		make "i :i + 2
+	]
+end
+;________________________________________________________________________________________
+to ft_algorithm :f
+; Routine sums the terms consisting of the product of the magnetometer data with a 
+; sinusoidal wave of a given frequency(f). See Fourier Transform algorithm at the top.
+; Routine stores power density(pd), sine wave sum(sin_sum), and cosine wave sum(cos_sum)
+; in global variables to be used in the write_pd routine.
+
+	let [i 0]
+	let [j 0]
+	let [tmp 0]
+
+	setsum_sin 0
+	setsum_cos 0
+	setpd 0
+
+	repeat (arr_size / 2) [
+		make "tmp (( read (mag_data + :i)))
+		setsum_sin sum_sin 
+			+ ((( read (sin_data +    :j                              )) * :tmp) 
+			/ (arr_size / 2))
+		setsum_cos sum_cos 
+			+ ((( read (sin_data +  ((:j + (arr_size / 4)) % arr_size))) * :tmp) 
+			/ (arr_size / 2))
+
+		make "i :i + 2
+;		make "j (:j + ( 2 * :f )) % arr_size
+;		make "j (:i * ( :f )) % arr_size
+;		make "j ( 2 * (((fact * :j / 2) + ( :f )) / fact)) % arr_size				;NEW CODE for allowing fractional frequencies
+;		make "j ((fact * :j + ( 2 * :f ) * ( fact + 1 )) / fact) % arr_size			;New Code: same as incrementing? might help with fractional frequencies
+;		make "j (( :i * ( :f ) * ( fact )) / fact) % arr_size					;Assumes "f" is, for 8.5 -> 85 and "fact" is "10"
+
+		ifelse ( :f < 128 )
+			[
+				make "j ( (:i * :f) / fact ) % arr_size							;WARNING i * f may be over 32,768
+			]
+			[
+				make "j ( 2 * (:i * ( :f / 2) / fact )) % arr_size
+			]
+	]
+
+	setpd (((4 * sum_sin) *' (4 * sum_sin)) + ((4 * sum_cos) *' (4 * sum_cos)))
+;	setpd_lrg (((sum_sin) *' (sum_sin)) + ((sum_cos) *' (sum_cos)))					;TO DO: check if small number is < 0 and .print correctly as 2^8 - (sml num)
+
+end
+;________________________________________________________________________________________
+to write_pd 
+; Routine stores power density(pd) in pd_data array.
+; Routine stores sine wave summation data in sum_sin array.
+; Routine stores cosine wave summation data in sum_cos array.
+
+	let [i 0]
+	let [j f0]
+	
+	if ((f1 - f0) != 63 )			;NEW CODE
+		[
+		setfact ((arr_size / 4) / (f1 - f0))
+		make "j f0 * fact
+		]
+
+	repeat (arr_size / 4) [
+;	repeat ( 110 ) [			; if loop goes beyond 110 the i > 220 clobbers beaconbuf
+		make "i :i + 2
+		ft_algorithm (:j)
+		write (pd_data + :i) pd
+		make "j :j + 1
+	]
+end
+;________________________________________________________________________________________
+to ft :f0 :f1
+; Routine implements Fourier Transform algorithm
+; Inputs f0 and f1 specify the beginning and ending frequencies that are cycled though
+; See Fourier Transform algorithm description above
+	
+	greenon
+	let [tmp 0]
+	let [i 2]							;;;;CHANGED	let[i (2 * f0)] --> was 2 (if "f0=1")
+
+	setpeak1 0
+	setpeak2 0
+	setpeak1_pd 0
+	setpeak2_pd 0
+	repeat (:f1 - :f0)
+                [
+		if ((read (pd_data + :i)) > :tmp)
+                        [
+			make "tmp (read (pd_data + :i))
+			setpeak1 (:f0 + :i / 2)				;;;;CHANGED	:i / 2
+			setpeak1_pd :tmp
+		        ]
+		make "i :i + 2
+	        ]
+
+	make "i 2
+	make "tmp 0
+	ifelse ((peak1 - :f0 - 1) > 0)
+	[
+		repeat (peak1 - :f0 - 1) [
+			if ((read (pd_data + :i)) > :tmp) [
+				make "tmp (read (pd_data + :i))
+				setpeak2 (:f0 + :i / 2)
+				setpeak2_pd :tmp
+			]
+			make "i :i + 2
+		]
+	]
+	[
+		setpeak2 0 
+		setpeak2_pd 0
+	]
+
+;	prs "|peak1 inter1|
+;	print peak1
+;	print interpolate peak1
+;	prs "|peak2 inter2|
+;	print peak2
+;	print interpolate peak2
+	greenoff
+end 
+;________________________________________________________________________________________
+
+; if plus = minus then interpolated offset is zero  (assumes that center > minus and center > plus)
+; if center = minus then interpolated offset is -1  (assumes that plus < minus)
+; if center = plus  then interpolated offset is +1  (assumes that minus < plus)
+; assume thatb freq > 0
+to interpolate :freq
+let [minus  read (pd_data + (2 * (:freq - 1)))]
+let [center read (pd_data + (2 *  :freq     ))]
+let [plus   read (pd_data + (2 * (:freq + 1)))]
+
+; prs "|minus center plus|
+; print :minus
+; print :center
+; print :plus
+
+let [pm_min :plus]
+if (:plus > :minus) [make "pm_min :minus]  ; pm_min equals to minimum (plus,minus)
+
+output 5 * (:plus - :minus) / (:center - :pm_min)         ; 100 times interpolated offset -1 to +1 (the actual offset in freq is -1/2 to +1/2)
+
+end
+;________________________________________________________________________________________
+to period :peak
+	let [p_0 ((arr_size / 2) * (s_r / 10) ) ] 
+        output (pscale * :p_0) / ( (pscale * :peak) + ((interpolate :peak) * (10 / pscale)) ) 
+end

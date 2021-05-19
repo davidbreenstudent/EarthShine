@@ -1,0 +1,201 @@
+
+; App Board Pin Outs
+;
+;                   --------------------     
+;                   |                O |   
+; 1.  3.3V Out      |             ---  |   18. Ground
+; 2.  DAC Out 0     |            | O | |   19. 3.3V
+; 3.  DAC Out 1     |             ---  |   20. 1-Wire
+; 4.  p6.7 - ADC7   |                  |   21. DAC Ref
+; 5.  p6.6 - ADC6   |                  |   22. MSP Ref
+; 6.  p6.5 - ADC5   |                  |   23. p1.3 - dp4
+; 7.  p6.4 - ADC4   |                  |   24. p1.4 - dp5
+; 8.  p6.3 - ADC3   |                  |   25. p3.1 - MOSI (SPI)
+; 9.  p6.2 - ADC2   |            ----  |   26. p3.2 - MISO (SPI)
+; 10. p6.1 - ADC1   |            |  |  |   27. p3.3 - CLK (SPI)
+; 11. p6.0 - ADC0   |            |  |  |   28. p3.0 - dp6
+; 12. p5.7 - dp0    |            ----  |   29. p3.6 - TX (UART)
+; 13. p5.6 - dp1    |             ||   |   30. p3.7 - RX (UART)
+; 14. p5.5 - dp2    |                  |   31. p5.0 - dp7
+; 15. p5.4 - dp3    |                  |   32. p5.1 - SDA (I2C)
+; 16. Reset         | _________  _____ |   33. p5.2 - SCL (I2C)
+; 17. Ground        | |       |  |   | |   34. p5.3 - dp8
+;                  --------------------
+;                      Port 4        RFM-22B
+;                  (p4.7 - p4.0) (p2.0, p1.7, p1.6, p1.5)
+;                                (TXANT, RXANT, IRQ, RADIO SELECT)
+
+; Code To perform digital i/o functions on the ulogo development
+; board v3.5. This includes setting individual pins to high/low
+; and reading an input voltage as either high or low
+;
+; Revised by Hunter Mills on 7/3/14
+;
+
+; This section defines the register names as per the msp430f2410
+; datasheet available at:
+;
+; http://www.ti.com/lit/ds/symlink/msp430f2410.pdf
+;
+; A breif explaination of the msp430 i/o pin nomenclature can
+; seen at:
+;
+; http://processors.wiki.ti.com/index.php/Digital_I/O_(MSP430)
+;
+
+constants 
+[[ta0ctl $0160][ta0r $0170][ta0ccr0 $172]
+
+[ucb0ctl0 $68][ucb0ctl1 $69][ucb0br0 $6a][ucb0br1 $6b][ucb0stat $6d][ucb0rxbuf $6e][ucb0txbuf $6f]
+
+[p1dir $22][p1out $21][p1in $20][p1sel $26]
+[p2dir $2a][p2out $29][p2in $28][p2sel $2e]
+[p3dir $1a][p3out $19][p3in $18][p3sel $1b]
+[p4dir $1E][p4out $1D][p4in $1C][p4sel $1F]
+[p5dir $32][p5out $31][p5in $30][p5sel $33]
+[p6dir $36][p6out $35][p6in $34][p6sel $37]
+
+[pinAI $3c][pinAO $3b]
+  
+[channel0 $01][channel1 $02][channel2 $04][channel3 $08][channel4 $10][channel5 $20][channel6 $40][channel7 $80]
+
+[ADC12CTL0 $1A0][ADC12CTL1 $1A2][ADC12MEM0 $140]
+[ADC12IE $1A6][ADC12MCTL0 $80][ADC12IFG $1A4]
+[ADC12IV $1A8]
+
+[MSC $80][REF2_5V $40][REFON $20][ADC12ON $10][ENC $2][ADC12SC $1][SHT0_8 $100][ADC12CLK_16 $200][ADC12CLK_4 $0][ADC12CLK_256 $800]
+[SHP $200][SHS_ADC12SC $0][ASC12SSEL_SMCLK $18][CONSEQ_SINGLE $0]
+[EOS $80]]
+
+; There are eight digital IO pins total. They are in slots 4
+; through 11 (the One-Wire being slot 1). The digital IO
+; pins are on ports 5, 4 and 3, and their individual pins on
+; the CPU are 5.0, 5.1, 5.2, 5.3, 4.0, 4.1, 3.6 and 3.7. 
+;
+; Note that pins on the CPU are distinct from pins on the dev
+; board. This is an unfortunate coincidence of nomenclature.
+; Perhaps we should call the dev board pins "slots" or
+; something, but we don't.
+;
+
+; All i/o pins must be set as either an input or an output. This 
+; is done by setting the direction register assosiated with each 
+; pin. If the specific bit at the given register is set to one,
+; it will be set as an output, and if it is set to zero, it will
+; be set as an input.
+;
+; In addition to this, all i/o pins must be enabled to operate 
+; as a general purpose i/o pin and disable their other modes
+; of operation.
+;
+
+define dp1enable [][ bclr p5sel channel3 ]
+define dp2enable [][ bclr p5sel channel2 ]
+define dp3enable [][ bclr p5sel channel1 ]
+define dp4enable [][ bclr p5sel channel0 ]
+define dp5enable [][ bclr p4sel channel1 ]
+define dp6enable [][ bclr p4sel channel0 ]
+define dp7enable [][ bclr p3sel channel7 ]
+define dp8enable [][ bclr p3sel channel6 ]
+
+define dp1input [][ bclr p5dir channel3 ]
+define dp2input [][ bclr p5dir channel2 ]
+define dp3input [][ bclr p5dir channel1 ]
+define dp4input [][ bclr p5dir channel0 ]
+define dp5input [][ bclr p4dir channel1 ]
+define dp6input [][ bclr p4dir channel0 ]
+define dp7input [][ bclr p3dir channel7 ]
+define dp8input [][ bclr p3dir channel6 ]
+
+define dp1output [][ bset p5dir channel3 ]
+define dp2output [][ bset p5dir channel2 ] 
+define dp3output [][ bset p5dir channel1 ]
+define dp4output [][ bset p5dir channel0 ]
+define dp5output [][ bset p4dir channel1 ]
+define dp6output [][ bset p4dir channel0 ]
+define dp7output [][ bset p3dir channel7 ]
+define dp8output [][ bset p3dir channel6 ]
+
+; This section creates words that allow the i/o pins to be 
+; set as high or low, or to read a supplied signal as either 
+; high or low.
+;
+; To set a pin high or low the output register for the
+; associated pin must be set. If this register is set to zero,
+; the output is set to low, and if the register is set to one, 
+; the output is set high.
+;
+; To read a pin, the associated input register must be read.
+; If the pin is supplied with a voltage, the register will be
+; set to one, and of the pin is not supplied, the register
+; will be set to zero.
+;
+
+define dp1off [][ bclr p5out channel3 ]
+define dp2off [][ bclr p5out channel2 ]
+define dp3off [][ bclr p5out channel1 ]
+define dp4off [][ bclr p5out channel0 ]
+define dp5off [][ bclr p4out channel1 ]
+define dp6off [][ bclr p4out channel0 ]
+define dp7off [][ bclr p3out channel7 ]
+define dp8off [][ bclr p3out channel6 ]
+
+define dp1on [][ bset p5out channel3 ]
+define dp2on [][ bset p5out channel2 ]
+define dp3on [][ bset p5out channel1 ]
+define dp4on [][ bset p5out channel0 ]
+define dp5on [][ bset p4out channel1 ]
+define dp6on [][ bset p4out channel0 ]
+define dp7on [][ bset p3out channel7 ]
+define dp8on [][ bset p3out channel6 ]
+
+define dp1read [][ output btst p5in channel3 ]
+define dp2read [][ output btst p5in channel2 ]
+define dp3read [][ output btst p5in channel1 ]
+define dp4read [][ output btst p5in channel0 ]
+define dp5read [][ output btst p4in channel1 ]
+define dp6read [][ output btst p4in channel0 ]
+define dp7read [][ output btst p3in channel7 ]
+define dp8read [][ output btst p3in channel6 ]
+
+; EXAMPLES:
+;
+; Using an i/o pin as an output to create a square wave:
+;
+; dp1enable   (Sets pin to i/o mode)
+; dp1output   (Sets pin to output mode)
+;
+; loop [
+;    dp1on
+;    wait 1
+;    dp1off
+;    wait 1
+; ]
+;
+; Using an i/o pin as an input to continually check for a 
+; supplied signal:
+;
+; dp1enable   (Sets pin to i/o mode)
+; dp1input    (sets pin to input mode)
+;
+; loop [
+;    if dp1read = 1 [ prs "High ]
+;    if dp1read = 0 [ prs "Low ]
+;    wait 1
+; ]
+;
+
+; Unnecessary command that has been grandfathered in 
+; because it is used by other words.
+;
+
+to dp-init
+    bsetb p5dir channel3 + channel2 + channel1 + channel0
+    bclr p5out channel3 + channel2 + channel1 + channel0
+    
+    bsetb p4dir channel1 + channel0
+    bclr p4out channel1 + channel0
+    
+    bsetb p3dir channel7 + channel6
+    bclr p3out channel7 + channel6
+end

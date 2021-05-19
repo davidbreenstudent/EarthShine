@@ -1,0 +1,524 @@
+to run-once    ; every experiment should have version of this word
+
+               ; what it does is up to the coder
+               ; this example runs the code for ~20 minutes and stops
+   print "run-once
+  init-jlogo
+  make "duration 8000
+  init-time
+  loop [
+    if (elapsedTime >  :duration) [ stop ] ; stop after ~5 minutes
+
+;    print "|receive-packet|
+    receive-packet
+;    make "packet-bytes  retrieve-packet
+;    print :packet-bytes
+    print-packet
+  
+    wait 100     ; wait ~100 one tenth seconds or ~10 seconds           
+    screencapture    ; option to display desktop on a website
+    wait 20
+blindexec "|scp -P 25000 /home/lbym/Pictures/lbym32.jpg lbym@192.168.2.1:/home/lbym/hpstream_backups/Desktops/lbym32.jpg|
+  ]
+   
+end
+
+to Yrun-once
+make "duration 4000
+print :duration
+init-jlogo
+    print "start
+init-time
+repeat 10 [ print rl $1f80 40 wait 30]
+loop [ print retrieve-packet
+       wait 30 screencapture wait 30
+    print elapsedTime
+    if (elapsedTime >  :duration) [ stop ]  ]
+end
+
+to XXrun-once
+make "duration 1000
+print :duration
+init-jlogo
+    print "start
+init-time
+; print "|Wait 30 seconds for app board to initialize|
+; wait 100    ; wait 10 sec
+; repeat 3  [ print rl $1f80 40 wait 30]
+; print "|finish 3 test packets|
+repeat 30 [ receive-packet
+      print rl $1f80 40 
+      wait 30 screencapture wait 30
+    print elapsedTime
+    if (elapsedTime >  :duration) [ stop ]  ]
+end
+
+to init-jlogo               ;master initialization word
+  print (se "|Starting | :project-name)  ;welcome message
+  init-ulogo                ;uLogo initialzation and boot squence
+  init-Calibration          ;calibrate temperature sensors
+  init-time                 ;start the elapsetime clock
+  make "oldcheckwd 0
+  make "checkwd 0
+  make "Sol1V-list []
+  make "Sol1I-list []
+  make "Sol2V-list []
+  make "Sol2I-list []
+  make "Sol3V-list []
+  make "Sol3I-list []
+end
+
+
+to init-Calibration 
+        make "Volt_cal [0 0 4095 6.66]
+        make "Current_cal [ 0 0 4095 300.0 ] ; resistor 56K
+end
+
+to init-ulogo
+  stopvm        ;stop vm makes sure the board is not running
+  compile
+  ul-blind-run [ ul-power ]       ;run power up sequence
+  wait 100
+;  ul-init       ;run initialization sequence
+;  ul-go         ;start experiment
+end 
+
+to process-data-packet     ; receive-packet will run this word for every packet received
+
+; print (se "|process | :type)
+ if (:type = 42) [
+;        print :p42-word00
+;        print :p42-word01
+	calibrate-list "BattV-list :p42-word06 :Volt_cal
+	calibrate-list "BattI-list :p42-word07 :Current_cal
+
+	calibrate-list "Sol1V-list :p42-word02 :Volt_cal
+	calibrate-list "Sol1I-list :p42-word03 :Current_cal
+
+	calibrate-list "Sol2V-list :p42-word04 :Volt_cal
+	calibrate-list "Sol2I-list :p42-word05 :Current_cal
+
+	calibrate-list "Sol3V-list :p42-word00 :Volt_cal
+	calibrate-list "Sol3I-list :p42-word01 :Current_cal
+
+
+;	make "per-lost (100 * ((last :SolP1-list) - (last :BattPin-list))/(last :SolP1-list))
+
+	make "pr-time  (se "|Time|     last :time-list) 
+	make "pr-Sol1V (se "|Sol1V:| blue-text two-digit last :Sol1V-list white-text)
+	make "pr-Sol1I (se "|Sol1I:| blue-text two-digit last :Sol1I-list white-text)
+	make "pr-Sol2V (se "|Sol2V:| blue-text two-digit last :Sol2V-list white-text)
+	make "pr-Sol2I (se "|Sol2I:| blue-text two-digit last :Sol2I-list white-text)
+	make "pr-Sol3V (se "|Sol3V:| blue-text two-digit last :Sol3V-list white-text)
+	make "pr-Sol3I (se "|Sol3I:| blue-text two-digit last :Sol3I-list white-text)
+	make "pr-BattV (se "|BattV:| blue-text two-digit last :BattV-list white-text)
+	make "pr-BattI (se "|BattI:| blue-text two-digit last :BattI-list white-text)
+
+;	make "pr-Timer (se "|Timer:| blue-text two-digit last :Timer-list white-text)
+;	make "pr-3V3 (se "|3V3:| blue-text two-digit last :3V3-list white-text)
+;	make "pr-SolP1 (se "|Sol1P:| blue-text two-digit last :SolP1-list white-text)
+;	make "pr-SolP2 (se "|Sol2P:| blue-text two-digit last :SolP2-list white-text)
+;	make "pr-BattPin (se "|BattPin:| blue-text two-digit last :BattPin-list white-text)
+;	make "pr-Pin-lost (se "|PinLoss:| blue-text :per-lost white-text)
+;	print (se :pr-time :pr-Sol1V :pr-Sol1I :pr-Sol2V :pr-Sol2I :pr-BattV :pr-BattI :pr-Timer :pr-3V3 :pr-SolP1 :pr-SolP2 :pr-BattPin :pr-Pin-lost white-text )
+
+	print (se :pr-time :pr-Sol1V :pr-Sol1I :pr-Sol2V :pr-Sol2I :pr-Sol3V :pr-Sol3I :pr-BattV :pr-BattI  white-text )
+
+	display-all      ; display all plots
+ ]
+end
+
+to display-all
+   aspect 2 4
+   Batt-plot  
+   display-plot        tile 2 4 1 1
+
+   Current-plot
+   display-plot        tile 2 4 1 2 
+
+   SolV-plot
+   display-plot        tile 2 4 2 1
+
+   SolI-plot
+   display-plot        tile 2 4 2 2
+
+end
+
+
+
+to Xprocess-data-packet     ; receive-packet will run this word for every packet received
+	if (:type = 42) [
+	calibrate-all-lists
+	make "powerIn-list []
+	make "powerInLoss-list []
+	make "powerOut-list []
+	make "powerOutLoss-list []
+	make "voltX100-list []
+
+;	dotimes [ i count :Sol-list ] [
+;		make "Volts (nth :i :Sol-list)
+;		make "Current (nth :i :SolI-list)
+;		make "powerIn-list (se :powerIn-list (:Volts * :Current)
+;	]
+	dotimes [ i count :Batt-list ] [
+		make "Volts (nth :i :BattV-list)
+		make "Current (nth :i :BattI-list)
+		make "powerOut-list (se :powerOut-list (:Volts * :Current)
+	]
+;	dotimes [ i count :Sol-list ] [
+;		make "Volts ((nth :i :Sol-list) - (nth :i :Batt-list))
+;		make "Current (nth :i :SolI-list)
+;		make "powerInLoss-list (se :powerInLoss-list (:Volts * :Current))
+;	]
+;	dotimes [ i count :Batt-list ] [
+;		make "Volts ((nth :i :Batt-list) - (nth :i :ABatt-list))
+;		make "Current (nth :i :BattI-list)
+;		make "powerOutLoss-list (se :powerOutLoss-list (:Volts * :Current)
+;	]
+
+	dotimes [ i count :BattV-list ] [
+              make "voltX100-list (se :voltX100-list 100 * (nth :i :BattV-list))
+	]
+
+	]
+end
+
+
+to calibrate-all-lists
+	calibrate-list "BattV-list :p42-word06 :Volt_cal
+	calibrate-list "BattI-list :p42-word07 :Current_cal
+
+;	calibrate-list "Sol-list :p42-word08 :Volt_cal
+;	calibrate-list "SolI :p42-word07 :Volt_cal
+;	calibrate-list "SolI-list :SolI :Current_cal
+;	calibrate-list "ABatt-list :p42-word03 :Volt_cal
+;	calibrate-list "Batt-list :p42-word04 :Volt_cal
+;	calibrate-list "BattI :p42-word02 :Volt_cal
+;	calibrate-list "BattI-list :BattI :Current_cal
+;	calibrate-list "GND-list :p42-word05 :Volt_cal
+;	calibrate-list "3v3-list :p42-word06 :Volt_cal
+;	calibrate-list "CapTime-list :p42-word00 :Volt_cal
+;	calibrate-list "Pow-list :p42-word01 :Volt_cal
+end
+
+to print-all
+	make "pr-time  (se "|time|     last :time-list) 
+	make "pr-AfterBatt (se "|AfterBatt:| blue-text two-digit last :ABatt-list white-text)
+	make "pr-Timer (se "|Cap Timer:| blue-text two-digit last :CapTime-list white-text)
+	make "pr-Sol (se "|Sol:| blue-text two-digit last :Sol-list white-text)
+	make "pr-SolI (se "|SolI:| blue-text two-digit last :SolI-list white-text)
+	make "pr-Pow (se "|POW:| blue-text two-digit last :Pow-list white-text)
+	make "pr-Batt (se "|Batt:| blue-text two-digit last :Batt-list white-text)
+	make "pr-BattI (se "|BattI:| blue-text two-digit last :BattI-list white-text)
+	print (se :pr-time :pr-AfterBatt :pr-Timer :pr-Sol :pr-SolI :pr-Pow :pr-Batt :pr-BattI white-text)
+	let [powerloss 0]
+	if ((last :powerInLoss-list) > 0) [
+		make "powerloss (:powerloss + (last :powerInLoss-list))
+	]
+	if ((last :powerOutLoss-list) > 0) [
+		make "powerloss (:powerloss + (last :powerOutLoss-list))
+	]
+	make "pr-PLoss (se "|Power Loss:| blue-text two-digit :powerloss white-text)
+	make "pr-PIn (se "|Power In:| blue-text two-digit (last :powerIn-list) white-text)
+	make "pr-POut (se "Power Out:| blue-text two-digit (last :powerOut-list) white-text)
+	print (se :pr-PIn :pr-POut :pr-PLoss)
+end
+
+to Batt-plot
+        black
+        plot-filename "batt
+	x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+
+        make "BattV10X-list []
+        dotimes [i count :BattV-list]
+                [make "BattV10X-list (se :BattV10X-list  10 * (nth :i :BattV-list))]
+	y-data "|Batt. Volts (10x)|   :BattV10X-list
+        ; print :BattV10x-list
+
+	setup-screen
+	select-all
+        make "ylower-val int (yminimum - 1.5)
+        make "yupper-val int (ymaximum + 1.5)
+        limits 0 :duration :ylower-val :yupper-val
+        limits 0 :duration 25 45
+        box
+        ptype 1
+	black points 
+        make "ytick int (:yupper-val - :ylower-val)
+	xaxis  4 40 1 true
+        yaxis  4 20 1 true
+	xlabel :xname
+	ylabel :yname
+
+end
+
+to SolV-plot
+        plot-filename "SolV
+	x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+
+	setup-screen
+	select-all
+        limits 0 :duration 0 6
+        black
+        box
+
+	y-data "|Solar Voltage|   :Sol1V-list
+        ptype 1
+        points
+
+	xaxis  4 40 1 true
+        yaxis  6 12 1 true
+	xlabel :xname
+	ylabel :yname
+
+	green
+	y-data "||   :Sol2V-list
+        points
+
+	magenta 
+	y-data "||   :Sol3V-list
+        points
+
+end
+
+to SolI-plot
+        plot-filename "SolI
+	x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+
+	setup-screen
+	select-all
+        limits 0 :duration 0 200
+        black
+        box
+
+	y-data "|Solar Current|   :Sol1I-list
+        ptype 1
+        points
+
+	xaxis   4 40 1 true
+        yaxis   5 25 1 true
+	xlabel :xname
+	ylabel :yname
+
+	green
+	y-data "||   :Sol2I-list
+        points
+
+	magenta 
+	y-data "||   :Sol3I-list
+        points
+
+end
+
+
+to testA
+
+loop [
+ 
+  grab
+  wait 10
+  see1f80
+  wait 100
+]
+end
+
+to see1f80
+  talkto 16
+  print 4567
+  print rl $1f80 40
+end
+
+to grab
+  talkto 16
+  print 1234
+  ul-run [ustar-rl 30 $1f80 40 $1f80]
+end
+
+to Zrun-once
+
+ init-jlogo
+ see-packet 30
+ wait 30
+ see-packet 16
+end
+
+to Xrun-once
+ init-jlogo
+ loop [ see-packet 16 wait 50 ]
+end
+
+to retrieve-packet
+  loop [
+    let[ pack rl $1400 40 ]
+    make "type nth 1 :pack
+    print (se "type :type)
+    print :pack
+    wl $1400 [0 0]
+    if (:type = 42) [output :pack]
+    if (:type = 72) [output :pack]
+    if (:type = 60) [output :pack]
+    if (:type = 50) [output :pack]
+    if (:type = 128) [output :pack]
+    wait 100
+  ]
+end
+
+to see-packet :n
+  talkto :n
+;  print :who
+;   print "|Process Packet|
+;    make "packet-bytes retrieve-packet
+;    make "packet-bytes rl $1f80 40
+    make "packet-bytes rl $1400 40
+    make "type nth 1 :packet-bytes 
+
+   print :packet-bytes
+   print :type
+;    if :type = 72 [
+      make "wp packet-words :packet-bytes
+      make "checkwd last :wp
+ ;     print :checkwd
+      print-packet
+      if not (:oldcheckwd = :checkwd) [ print-packet]
+;    ]
+    make "oldcheckwd :checkwd
+end
+
+
+;jlogo file for BasicBoard
+to power ; this can do anything that you want
+  run-forever ; choose to run "run-once" forever (could be any user choice)
+end
+
+to Yrun-once    ; every experiment should have version of this word
+               ; what it does is up to the coder
+               ; this example runs the code for ~20 minutes and stops
+  init-jlogo
+  loop [
+    if (elapsedTime >  :duration) [ stop ] ; stop after ~5 minutes
+    receive-packet     ; get packets from app boards via one wire network
+    wait 90       ; wait ~100 one tenth seconds or ~10 seconds           
+    ;screencapture    ; option to display desktop on a website
+   ]
+end
+
+to Xinit-jlogo               ;master initialization word
+  print (se "|Starting | :project-name)  ;welcome message
+  init-Calibration          ;calibrate temperature sensors
+  init-time                 ;start the elapsetime clock
+  init-ulogo                ;uLogo initialzation and boot squence
+end
+
+to Xinit-ulogo
+  stopvm        ;stop vm makes sure the board is not running
+  ul-power      ;run power up sequence
+  ul-init       ;run initialization sequence
+  ul-go         ;start experiment
+end 
+
+to Current-plot
+  ; print :BattI-list
+  black
+  plot-filename "current
+  x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+  y-data "|Batt. Current (ma)|   :BattI-list
+  setup-screen
+  select-all
+  limits 0 :duration 0 yupper
+  box
+  ptype 1
+  xaxis  4 40  1 true
+  yaxis  5 50 1 true
+  magenta points
+  black
+  xlabel :xname
+  ylabel :yname
+
+end
+
+to Voltage-plot
+;  print :BattV-list
+  black
+  plot-filename "voltage
+  x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+  y-data "|Volts|   :BattV-list ;ydata is light
+  setup-screen
+  black
+  select-all
+  limits 0 :duration 0 yupper
+  ptype 1
+  box
+  xaxis 4 40 1 true
+  yaxis  3 30 1 true
+
+  points
+
+  black
+  xlabel :xname
+  ylabel :yname
+
+end
+
+
+to receive-packet
+  if not :playback [
+    make "packet-bytes retrieve-packet  ;reads the packet off the one-wire
+    blindexec "|touch -ma /home/lbym/.watch-time|
+
+    ]
+ 
+  if :playback [
+    blindexec "|touch -ma /home/lbym/.watch-time|
+    make "linewords parse freadline
+    make "packet-bytes []
+    let [lowbyte 0]
+    let [highbyte 0]
+    let [nthword 0]
+    make "play-time nth 1 :linewords
+    if :start-time = 0 [make "start-time :play-time]
+    dotimes [i (count :linewords) - 2]
+      [make "nthword nth (:i + 2) :linewords
+       make "highbyte int (:nthword / 256)
+       make "lowbyte  :nthword - (256 * :highbyte) 
+       make "packet-bytes (se :packet-bytes :lowbyte :highbyte)
+      ]
+      repeat (40 - (count :packet-bytes)) [
+        make "packet-bytes (se :packet-bytes 0) ]
+   ]
+    
+				      ;network from the app board
+  if (validate-packet)  [     ;make sure packet is not empty
+      make "type nth 1 :packet-bytes ;pull type information out of packet       
+      if :master-packet = 0 [make "master-packet :type]
+      ; print-packet
+      make "wp packet-words :packet-bytes
+
+      let [csum 0]
+;      print :wp
+      dotimes [i count :wp] [ make "csum :csum + nth :i :wp ] 
+      make "csum  (:csum / 65536 )
+      make "csum  :csum - int ( :csum )
+;      print :csum
+      make "csum 0
+
+      if (:csum = 0) [
+;           print :wp
+           dotimes [i nth 4 :wp] [
+           make "wname word "|-word| bf (100 + :i) 
+           make "wname word :type :wname
+           make "wname word "p :wname
+           if (name? :wname ) = false [ make :wname [] ]
+           if (count :time-list) = 0  [ make :wname [] ]
+           make :wname (se thing :wname nth (:i + 5) :wp) ]
+           make "time  elapsedTime  ;time between now and start
+           addTimeToList :time
+ 	   process-data-packet     
+
+      ]
+  ]
+end
+
+to display-clear
+  desktop-clear
+end
+

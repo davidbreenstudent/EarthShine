@@ -1,0 +1,97 @@
+;jlogo file for BasicBoard
+to EdgeCube; this can do anything that you want
+  run-forever ; choose to run "run-once" forever (could be any user choice)
+end
+
+to run-once    ; every experiment should have version of this word
+               ; what it does is up to the coder
+               ; this example runs the code for ~20 minutes and stops
+	init-jlogo
+	loop [
+		if (elapsedTime > 1000) [ stop ] ; stop after ~5 minutes
+		receive-packet ; get packets from app boards via one wire network
+		;wait 1        ; wait ~50 one tenth seconds or ~5 seconds           
+		;screencapture  ; option to display desktop on a website
+	]
+end
+
+to init-jlogo              	  ;master initialization word
+	print (se "|Starting | :project-name)  ;welcome message
+	init-calibration          ;calibrate temperature sensors
+	init-time                 ;start the elapsetime clock
+	init-ulogo                ;uLogo initialzation and boot squence
+end
+
+to init-Calibration ; approximate calibration data for all temerature sensors
+		    ; the values need to be updated separately for each sensor
+	make "light_cal []             ; no calibation for photo diode light sensor
+	make "temp_cal [580 0 860 28]  ; list is (ADU deg_C ADU deg_C)
+end
+
+to init-ulogo
+	stopvm        ;stop vm makes sure the board is not running
+	ul-power      ;run power up sequence
+	ul-init       ;run initialization sequence
+	ul-go         ;start experiment
+end 
+
+to process-data-packet     ; receive-packet will run this word for every packet received
+
+	if (:type = 42) [
+
+	make "light-list :p42-word00
+	;dotimes [i  count :p42-word00 ] [
+	;	make "light-list (se :light-list (:p42-word00)) 
+	;]
+	
+
+	calibrate-list "temp-list :p42-word08 :temp_cal
+	print-data
+	display-all      ; display all plots
+	]
+end
+
+to print-data
+	make "pr-time  (se "|time|     last :time-list) 
+	make "pr-light (se "|light:| blue-text last :light-list white-text)
+	make "pr-temp (se "|temp:| last :temp-list)
+	make "pr-temp (se white-text :pr-temp "|(adc:| blue-text last :p42-word08 "|)| )
+	print (se :pr-time :pr-light :pr-temp white-text )
+end
+
+to plot-light
+	leaf-plot  ;plot points as circles
+	display-plot tile 1 2 1 1
+end
+
+to leaf-plot
+	aspect 1 2
+	x-data "|Elapsed_Time_(sec)| :time-list   ;xdata is time
+	y-data "|Light_(relative %)| :light-list ;ydata is light
+	setup-screen
+	select-all
+;  limits xlower xupper ylower yupper
+	limits 0 1000 0 10000
+	box
+	xaxis 10 60 1 true
+	yaxis 10 60 1 true
+	xlabel :xname
+	ylabel :yname
+	red ptype 3 points
+end
+
+to plot-temp
+	aspect 2 4
+	x-data "|Elapsed_Time_(sec)| :time-list  ;xdata is time
+	y-data "|Temp_(deg_C)| :temp-list 
+	quick-plot  	;the plot type is a scatter plot
+	display-plot        tile 2 4 2 4
+end
+
+to display-all
+	plot-light
+	plot-temp
+end
+
+r
+

@@ -1,0 +1,58 @@
+to receive-packet
+  if not :playback [
+    make "packet-bytes retrieve-packet  ;reads the packet off the one-wire
+    blindexec "|touch -ma /home/lbym/.watch-time|
+
+    ]
+ 
+  if :playback [
+    blindexec "|touch -ma /home/lbym/.watch-time|
+    make "linewords parse freadline
+    make "packet-bytes []
+    let [lowbyte 0]
+    let [highbyte 0]
+    let [nthword 0]
+    make "play-time nth 1 :linewords
+    if :start-time = 0 [make "start-time :play-time]
+    dotimes [i (count :linewords) - 2]
+      [make "nthword nth (:i + 2) :linewords
+       make "highbyte int (:nthword / 256)
+       make "lowbyte  :nthword - (256 * :highbyte) 
+       make "packet-bytes (se :packet-bytes :lowbyte :highbyte)
+      ]
+      repeat (40 - (count :packet-bytes)) [
+        make "packet-bytes (se :packet-bytes 0) ]
+   ]
+    
+				      ;network from the app board
+  if (validate-packet)  [     ;make sure packet is not empty
+      make "type nth 1 :packet-bytes ;pull type information out of packet       
+      if :master-packet = 0 [make "master-packet :type]
+      print-packet
+      make "wp packet-words :packet-bytes
+
+      let [csum 0]
+      print :wp
+      dotimes [i count :wp] [ make "csum :csum + nth :i :wp ] 
+      make "csum  (:csum / 65536 )
+      make "csum  :csum - int ( :csum )
+      print :csum
+      make "csum 0
+
+      if (:csum = 0) [
+           print :wp
+           dotimes [i nth 4 :wp] [
+           make "wname word "|-word| bf (100 + :i) 
+           make "wname word :type :wname
+           make "wname word "p :wname
+           if (name? :wname ) = false [ make :wname [] ]
+           if (count :time-list) = 0  [ make :wname [] ]
+           make :wname (se thing :wname nth (:i + 5) :wp) ]
+           make "time  elapsedTime  ;time between now and start
+           addTimeToList :time
+ 	   process-data-packet     
+
+      ]
+  ]
+end
+`

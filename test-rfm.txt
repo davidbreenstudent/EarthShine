@@ -1,0 +1,251 @@
+;These are the defines for the uStar-v2.1 board
+;kevin zack
+;03/13/2018
+
+
+;-----------RFM22B-------------------------------------------------------------
+define rx-ant-22 		[][bsetb p5out $40 bclrb p5out $20] 		;rx p5.6 tx p5.5
+define tx-ant-22 		[][bclrb p5out $40 bsetb p5out $20] 		;rx p5.6 tx p5.5
+define cslow-22  		[][bclrb p2out $40]				;p2.6
+define cshigh-22 		[][bsetb p2out $40]				;p2.6
+define waitfor-irq-22 	[][waituntil [not (readb p2in) and $80]]		;irq-22 p2.7 
+define no-ant-22		[][bclrb p5out $40][bclr p5out $20]
+define p5-set                   [][bsetb p5dir $f8]  ; $80 + $40 + $20 + $10 + $08
+;-----------RFM23BP------------------------------------------------------------
+
+define rx-ant-23 		[][bsetb p1out $80 bclrb p2out $01] 		;rx p1.7 tx p2.0
+define tx-ant-23 		[][bclrb p1out $80 bsetb p2out $01] 		;rx p1.7 tx p2.0
+define cslow-23  		[][bclrb p1out $20] 				;p1.5
+define cshigh-23 		[][bsetb p1out $20] 				;p1.5
+define waitfor-irq-23 	[][waituntil [not (readb p1in) and $40]] 		;irq-23 p1.6
+define no-ant-23		[][bclrb p1out $80][bclr p2out $01]
+define p1-set                   [][bsetb p1dir $b8]   ; $80 + $20 + $10 + $08
+
+;-----------RFSWITCH-----------------------------------------------------------
+
+define vc1-on			[][bsetb p5out $10]		;p5.4
+define vc1-off			[][bclrb p5out $10]		;p5.4
+define vc2-on			[][bsetb p5out $08]		;p5.3
+define vc2-off			[][bclrb p5out $08]		;p5.3
+define rfswitch-22		[][vc1-off vc2-off vc1-on] 			
+define rfswitch-23		[][vc1-off vc2-off vc2-on] 		
+
+;-----------SRAM---------------------------------------------------------------
+define cslow-sram		[][bclrb p6out $04]		;p6.2
+define cshigh-sram		[][bsetb p6out $04]     	;p6.2
+define p6-set                   [][bsetb p6dir $04]
+
+;-----------SDCARD-------------------------------------------------------------
+define cslow-sd		        [][bclrb p3out $01] 		;p3.0
+define cshigh-sd		[][bsetb p3out $01] 		;p3.0
+define p3-set                   [][bsetb p3dir $01]
+;-----------POWER--------------------------------------------------------------
+define rfm22_shdn		[][bclrb p5out $80] 		;p5.7
+define rfm22_en			[][bsetb p5out $80] 		;p5.7
+define rfm23_en 		[][bsetb p1out $10] 		;p1.4
+define rfm23_shdn		[][bclrb p1out $10] 		;p1.4
+define rail_en  		[][bsetb p1out $08] 		;p1.3
+define rail_shdn		[][bclrb p1out $08] 		;p1.3
+
+;-----------LED----------------------------------------------------------------
+define blueon			[][bclr p2out $08]       	;p2.3
+define blueoff			[][bset p2out $08] 		;P2.3
+define greenon			[][bclr p2out $10] 	        ;P2.4
+define greenoff		        [][bset p2out $10]  		;P2.4
+define redon			[][bclr p2out $20] 		;P2.5
+define redoff			[][bset p2out $20]  		;P2.5
+define alloff  			[][bset p2out $38]
+define p2-set                   [][bsetb p2dir $78]         ;$40 + $20 + $10 + $08
+
+;-----------GPS----------------------------------------------------------------
+define gps-enn			[][bsetb p5out $01] 		;p5.0
+define gps-shdnn		[][bclrb p5out $01] 		;p5.0
+
+;-----------ADC----------------------------------------------------------------
+;A0 		p6.0
+;A1 		p6.1
+;tmp1 		p6.3
+;tmp2 		p6.4
+;unreg-cur 	p6.5
+;tmep3 		p6.6
+;bat-read 	p6.7
+
+;-----------DP-----------------------------------------------------------------
+; DP0  		p2.1
+
+constants [	
+
+	  [p1dir $22][p1out $21][p1in $20]
+          [p2dir $2a][p2out $29]
+          [p3sel $1b]
+          [p4dir $1E][p4out $1D][p4in $1C][p4sel $1F]
+          [p5dir $32][p5out $31][p5in $30][p5sel $33]
+	  [p6dir $36] [p6out $35]
+          [ucb0ctl0 $68][ucb0ctl1 $69]
+
+	  [ucb0br0 $6a][ucb0br1 $6b]
+
+	  [ucb0stat $6d][ucb0rxbuf $6e][ucb0txbuf $6f]
+          ;[packet $1f80][rpacket $1f00][test $1300]
+          [packet $1fc0][rpacket $1400][test $1300]
+          [command-center $380]
+          
+	  ]
+
+
+global [baud ]
+global [freqdev freq75 freq76 freq77]
+
+define vm-run      [][ output btst p1in channel0 ]
+define vm-run-init [][ bclr p1sel channel0
+                       bclr p1dir channel0 ]
+
+; In addition to this, all i/o pins must be enabled to operate 
+define dp1enable [][ bclr p5sel channel3 ]
+define dp2enable [][ bclr p5sel channel2 ]
+define dp3enable [][ bclr p5sel channel1 ]
+define dp4enable [][ bclr p5sel channel0 ]
+define dp5enable [][ bclr p4sel channel1 ]
+define dp6enable [][ bclr p4sel channel0 ]
+define dp7enable [][ bclr p3sel channel7 ]
+define dp8enable [][ bclr p3sel channel6 ]
+
+to init-pins
+
+p1-set
+p2-set
+p3-set
+p5-set
+p6-set
+
+;writeb p2dir $38
+;writeb p2out $00
+write adcctl0 $10
+write adcctl1 $f8
+bset adcae0 1
+bset adcctl0 2
+
+;dp4enable
+;dp4output
+;dp4off
+;dp5on   ; turn on radio power
+
+alloff
+
+end
+
+to ul-power
+;         init-OnBoardLeds ;control the on board LEDs
+         redon ;turns on the red LED
+         wait 10 ;wait 1 second
+         redoff ;turns off the red LED
+         wait 10 ;wait 1 second
+;         write $210 timestamph + 100   ; reset after 1000s
+         ul-init
+         ul-go
+end
+
+
+to ul-init
+         redon greenon
+         wait 10 ;wait 1 second
+         alloff ;turns off the red and green LEDs
+         wait 10 ;wait 1 second
+      msp-init
+      init-pins
+      msp-init
+end
+
+to ul-go
+         greenon ;turn on the green LED
+         wait 10 ;wait 1 second
+         alloff ;turn off the green LED
+         wait 10 ;wait 1 second
+
+  setbaud 9600
+;  setbaud 501
+  setfreqdev 0        ; overridden by baud rate table
+  setfreq75  0        ; regs 75 0x53, 76 0xba, 77 0xa0 set to 437.465 MHz
+  setfreq76  0
+  setfreq77  0
+
+;  rfm-init
+  test-receive
+; loop [test-send mwait 4000]
+end
+
+to save-packet
+
+let [len rreg $4b
+     addr rpacket]
+;prh :len
+
+make "addr rpacket
+; prh rpacket
+repeat :len [writeb :addr rreg $7f make "addr :addr + 1]
+
+ prs "|got packet|
+ prh rreg $09
+ prh :len
+ make "addr rpacket 
+ repeat :len [prh readb :addr
+                make "addr :addr + 1
+ ]
+ prs "
+
+
+end
+
+;  also in util.txt
+;to wdchecksum :addr :len
+;let [res 0]
+;repeat :len / 2 
+; [ make "res :res + read :addr 
+;   make "addr :addr + 2]
+;output :res
+;end
+
+constants [[status $202][inbuf $300][inbuf-len $301]]
+
+define stray-packet? [] [output (readb status) and 2]
+define clear-stray [] [bclrb status 2]
+
+to test-receive
+    rfm-init
+    mwait 1000
+    prh rreg $09
+    setup-rx
+     loop [
+ ;     rfm-init
+ ;     setup-rx
+      if (receive-packet?)
+          [ alloff greenon save-packet setup-rx mwait 100 alloff ] ;took out stop
+           mwait 1000 redon mwait 1000 alloff  
+     ]
+end
+
+to test-send
+  clear-res
+  fprintb $aa
+  fprintb 5
+  fprintb 17
+  fprintb $80
+  fprintb $f9
+  fprintb 0
+  alloff
+  mwait 1000
+  blueon
+  send-packet
+  blueoff
+end
+
+
+to checksum :addr :len
+let [res 0]
+repeat :len 
+ [ make "res :res + readb :addr 
+   make "addr :addr + 1]
+output :res
+end
+
+

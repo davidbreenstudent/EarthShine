@@ -1,0 +1,160 @@
+;   Code to Measure Pulse widths using Timer_B.
+;
+;   Written by Hunter Mills on 7/9/14
+;
+;   Code is Designed to be used on Digital Pin 6. Code could be
+;   altered to be used on Digital Pin 5. To do this, ports must
+;   be set to Digital Pin 5 accordingly, Timer_B #1 registers
+;   must be loaded, and all functions containing Timer_B #0 must
+;   be changed to Timer_B #1.
+;
+
+;   Code Operates by Initiating TImer_B, waiting for the correct
+;   state change from the input, and storing the time 
+;   correlating to that change, wating for another change and 
+;   storing that value as well. The difference of these values 
+;   are taken and returned.
+;
+
+;   Register Names and Locations as per MSP430F2410 Datasheet
+;   available at:
+;
+;   http://www.ti.com/lit/ds/symlink/msp430f2410.pdf
+;
+;   Names of Individual Bits as per MSP430 User Manual available
+;   at:
+;
+;   http://www.ti.com/lit/ug/slau144j/slau144j.pdf
+;
+
+constants [
+
+   [ TBCTL $180 ]
+   [ TBR $190 ]
+   [ TBCCR0 $192 ]
+   [ TBCCTL0 $182 ]
+
+   [ bit0 $01 ][ bit1 $02 ][ bit2 $04 ][ bit3 $08 ]
+   [ bit4 $10 ][ bit5 $20 ][ bit6 $40 ][ bit7 $80 ]
+   [ bit8 $100 ][ bit9 $200 ][ bit10 $400 ][ bit11 $800 ]
+   [ bit12 $1000 ][ bit13 $2000 ][ bit14 $4000 ][ bit15 $8000 ]
+
+   [p4sel $1F][p4dir $1E][channel0 $01]
+
+]
+
+; Bits in Timer B Control Register
+
+constants [
+
+   [ TBIFG $01 ][ TBIE $02 ][ TBCLR $04 ]
+   [ MC0 $10 ][ MC1 $20 ][ ID0 $40 ][ ID1 $80 ]
+   [ TBSSEL0 $100 ][ TBSSEL1 $200 ][ CNTL0 $800 ]
+   [ CNTL1 $1000 ][ TBCLGRP0 $2000 ][ TBCLGRP1 $4000 ]
+
+]
+
+;   Bits in Timer B Capture/Compare Control Register X
+
+constants [
+
+   [ CCIFG $01 ][ COV $02 ][ OUT $04 ][ CCI $08 ]
+   [ CCIE $10 ][ OUTMOD0 $20 ][ OUTMOD1 $40 ][ OUTMOD2 $80 ]
+   [ CAP $100 ][ CLLD0 $200 ][ CLLD1 $400 ][ SCS $800 ]
+   [ CCIS0 $1000 ][ CCIS1 $2000 ][ CM0 $4000 ][ CM1 $8000 ]
+ 
+]
+
+;   Initiation Step:
+;
+;   Basic Setup with no division (most resolution), capture
+;   on rising and falling edges, and starting the Clock.
+;
+
+to init-TimerB
+
+   bset p4sel channel0     ; Disables GPIO and Enables Timer_B
+   bclr p4dir channel0     ; Sets port as input
+
+   bset TBCTL TBCLR        ; Restarts Clock
+
+   bclr TBCTL MC0          ; Clock set to run Continuously
+   bset TBCTL MC1
+
+   bclr TBCTL ID0          ;Divider set to zero
+   bclr TBCTL ID1
+
+   bclr TBCTL TBSSEL0      ; Set to SMCLK
+   bset TBCTL TBSSEL1
+
+   bclr TBCTL CNTL0        ; 16-bit counter length
+   bclr TBCTL CNTL1
+
+   bset TBCCTL0 CAP        ; Capture Mode
+   bset TBCCTL0 SCS        ; Synchronous Mode
+
+   bclr TBCCTL0 CCIS0      ; Capture input on Digital Pin 6
+   bclr TBCCTL0 CCIS1
+   
+   bset TBCCTL0 CM0        ; Capture time on Rising and Falling
+   bset TBCCTL0 CM1        ; Edge
+
+   bclr TBCCTL0 CCIFG      ; Clear Flags
+   bclr TBCCTL0 COV
+
+end
+
+;   UnInit Step:
+;
+;   Turns off the Clock to Save Power
+;
+
+to uninit-TimerB
+
+   bclr TBCTL MC0          ; Turns Clock Off
+   bclr TBCTL MC1
+   writeb TBR 0
+
+end
+
+
+;   Measure Pulse Widths:
+;
+;   Function to Measure the Width of a Pulse. It waits until
+;   the input is low and captures the clock value when the input
+;   changes from Low to High and again waits to capture another
+;   clock value when the input changes from High to Low. It then
+;   returns the difference of these clock values.
+;
+;   Other steps are taken in case the clock rounds over during 
+;   the coures of the measurement, and to check if there is an 
+;   input overflow (Data is coming in too fast).
+;
+
+
+to Pulse-Width-Measure
+   
+   let [ t0 0 ]
+   let [ tf 0 ]
+
+   waituntil [ (btst TBCCTL0 CCI) = 0 ]
+
+   bclr TBCCTL0 COV
+   bclr TBCTL TBIFG
+
+   waituntil [ (btst TBCCTL0 CCI) = 1 ]
+
+   make "t0 ( read tbccr0 )
+
+   waituntil [ (btst TBCCTL0 CCI) = 0 ]
+
+   make "tf ( read tbccr0 )
+
+   if ( ( btst TBCCTL0 COV ) = 1 ) [ prs "Overflow! ]
+
+   ifelse ( ( btst TBCTL TBIFG ) = 1 ) 
+      [ output 65536 + :tf - :t0 ]
+      [ output :tf - :t0 ]
+
+end
+

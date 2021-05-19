@@ -1,0 +1,203 @@
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  SIGSEGV (0xb) at pc=0x00007fbaaac7a023, pid=2288, tid=140440732858112
+#
+# JRE version: OpenJDK Runtime Environment (7.0_95) (build 1.7.0_95-b00)
+# Java VM: OpenJDK 64-Bit Server VM (24.95-b01 mixed mode linux-amd64 compressed oops)
+# Derivative: IcedTea 2.6.4
+# Distribution: Ubuntu Xenial Xerus (development branch), package 7u95-2.6.4-3
+# Problematic frame:
+# C  [libatk-bridge-2.0.so.0+0xf023]
+#
+# Failed to write core dump. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
+#
+# If you would like to submit a bug report, please include
+# instructions on how to reproduce the bug and visit:
+#   http://icedtea.classpath.org/bugzilla
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+
+---------------  T H R E A D  ---------------
+
+Current thread (0x00007fbae000a000):  JavaThread "main" [_thread_in_native, id=2289, stack(0x00007fbae7ee7000,0x00007fbae7fe8000)]
+
+siginfo:si_signo=SIGSEGV: si_errno=0, si_code=1 (SEGV_MAPERR), si_addr=0x0000000000000038
+
+Registers:
+RAX=0x0000000000000000, RBX=0x00007fbaaae99b98, RCX=0x0000000000000003, RDX=0x0000000000000000
+RSP=0x00007fbae7fe6280, RBP=0x00007fbae0308e70, RSI=0x00007fbae0000020, RDI=0x00007fbae0308e70
+R8 =0x00007fbae02ec0c0, R9 =0x00007fbaab2d6490, R10=0x0000000000000182, R11=0x00007fbaaac7a780
+R12=0x0000000000000000, R13=0x00000000cc5cce08, R14=0x00007fbae7fe6310, R15=0x00007fbae000a000
+RIP=0x00007fbaaac7a023, EFLAGS=0x0000000000010202, CSGSFS=0x0000000000000033, ERR=0x0000000000000004
+  TRAPNO=0x000000000000000e
+
+Top of Stack: (sp=0x00007fbae7fe6280)
+0x00007fbae7fe6280:   00007fbaab2d6490 00007fbaab2d6490
+0x00007fbae7fe6290:   00007fbae7fe62f8 00007fbaab0c53ae
+0x00007fbae7fe62a0:   00000000cc5cce08 00007fbadd0127f8
+0x00007fbae7fe62b0:   00007fbafffffffe 00007fbae7fe62b8
+0x00007fbae7fe62c0:   00000000cc5cce08 00007fbae7fe6310
+0x00007fbae7fe62d0:   00000000cc5d3398 0000000000000000
+0x00007fbae7fe62e0:   00000000cc5cce08 0000000000000000
+0x00007fbae7fe62f0:   00007fbae7fe6318 00007fbae7fe6358
+0x00007fbae7fe6300:   00007fbadd006058 00000000f2303fb8
+0x00007fbae7fe6310:   00007fbadd00ecd8 00007fbae7fe6318
+0x00007fbae7fe6320:   00000000cc605142 00007fbae7fe6378
+0x00007fbae7fe6330:   00000000cc605580 0000000000000000
+0x00007fbae7fe6340:   00000000cc605258 00007fbae7fe6318
+0x00007fbae7fe6350:   00007fbae7fe6370 00007fbae7fe63c0
+0x00007fbae7fe6360:   00007fbadd006706 0000000000000000
+0x00007fbae7fe6370:   00000000f23f5ee8 00000000f234f9d8
+0x00007fbae7fe6380:   00007fbae7fe6380 00000000cc607155
+0x00007fbae7fe6390:   00007fbae7fe6400 00000000cc6074f0
+0x00007fbae7fe63a0:   0000000000000000 00000000cc6071c0
+0x00007fbae7fe63b0:   00007fbae7fe6370 00007fbae7fe63f8
+0x00007fbae7fe63c0:   00007fbae7fe6448 00007fbadd006706
+0x00007fbae7fe63d0:   0000000000000000 0000000000000000
+0x00007fbae7fe63e0:   0000000000000001 0000000000000002
+0x00007fbae7fe63f0:   0000000000000000 00000000f23f5ee8
+0x00007fbae7fe6400:   00000000f234fc00 00007fbae7fe6408
+0x00007fbae7fe6410:   00000000cc360ea6 00007fbae7fe6468
+0x00007fbae7fe6420:   00000000cc361b80 0000000000000000
+0x00007fbae7fe6430:   00000000cc360ee0 00007fbae7fe63f8
+0x00007fbae7fe6440:   00007fbae7fe6460 00007fbae7fe64b0
+0x00007fbae7fe6450:   00007fbadd006058 00000000f234fc00
+0x00007fbae7fe6460:   00000000f23f5ee8 00000000f22ed5c8
+0x00007fbae7fe6470:   00007fbae7fe6470 00000000cc2fbe3a 
+
+Instructions: (pc=0x00007fbaaac7a023)
+0x00007fbaaac7a003:   ff 66 2e 0f 1f 84 00 00 00 00 00 66 90 55 53 48
+0x00007fbaaac7a013:   89 fd 48 83 ec 08 48 8d 1d 78 fb 21 00 48 8b 03
+0x00007fbaaac7a023:   48 8b 78 38 48 85 ff 74 0b 48 89 ee e8 9c ad ff
+0x00007fbaaac7a033:   ff 48 8b 03 48 8b 78 20 48 89 ee e8 2d a3 ff ff 
+
+Register to memory mapping:
+
+RAX=0x0000000000000000 is an unknown value
+RBX=0x00007fbaaae99b98: <offset 0x22eb98> in /usr/lib/x86_64-linux-gnu/libatk-bridge-2.0.so.0 at 0x00007fbaaac6b000
+RCX=0x0000000000000003 is an unknown value
+RDX=0x0000000000000000 is an unknown value
+RSP=0x00007fbae7fe6280 is pointing into the stack for thread: 0x00007fbae000a000
+RBP=0x00007fbae0308e70 is an unknown value
+RSI=0x00007fbae0000020 is an unknown value
+RDI=0x00007fbae0308e70 is an unknown value
+R8 =0x00007fbae02ec0c0 is an unknown value
+R9 =0x00007fbaab2d6490: jaw_debug+0 in /usr/lib/jvm/java-7-openjdk-amd64/jre/lib/ext/libatk-wrapper.so at 0x00007fbaab0bf000
+R10=0x0000000000000182 is an unknown value
+R11=0x00007fbaaac7a780: atk_bridge_set_event_context+0 in /usr/lib/x86_64-linux-gnu/libatk-bridge-2.0.so.0 at 0x00007fbaaac6b000
+R12=0x0000000000000000 is an unknown value
+R13=0x00000000cc5cce08 is an oop
+{method} 
+ - klass: {other class}
+R14=0x00007fbae7fe6310 is pointing into the stack for thread: 0x00007fbae000a000
+R15=0x00007fbae000a000 is a thread
+
+
+Stack: [0x00007fbae7ee7000,0x00007fbae7fe8000],  sp=0x00007fbae7fe6280,  free space=1020k
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+C  [libatk-bridge-2.0.so.0+0xf023]
+
+Java frames: (J=compiled Java code, j=interpreted, Vv=VM code)
+j  org.GNOME.Accessibility.AtkWrapper.loadAtkBridge()V+0
+j  org.GNOME.Accessibility.AtkWrapper$3.eventDispatched(Ljava/awt/AWTEvent;)V+18
+j  java.awt.Toolkit$SelectiveAWTEventListener.eventDispatched(Ljava/awt/AWTEvent;)V+733
+j  java.awt.Toolkit.notifyAWTEventListeners(Ljava/awt/AWTEvent;)V+30
+j  java.awt.Component.dispatchEventImpl(Ljava/awt/AWTEvent;)V+250
+j  java.awt.Container.dispatchEventImpl(Ljava/awt/AWTEvent;)V+42
+j  java.awt.Component.dispatchEvent(Ljava/awt/AWTEvent;)V+2
+j  java.awt.Container.addImpl(Ljava/awt/Component;Ljava/lang/Object;I)V+304
+j  javax.swing.JRootPane.addImpl(Ljava/awt/Component;Ljava/lang/Object;I)V+4
+j  java.awt.Container.add(Ljava/awt/Component;I)Ljava/awt/Component;+4
+j  javax.swing.JRootPane.setGlassPane(Ljava/awt/Component;)V+82
+j  javax.swing.JRootPane.<init>()V+14
+j  javax.swing.JFrame.createRootPane()Ljavax/swing/JRootPane;+4
+j  javax.swing.JFrame.frameInit()V+16
+j  javax.swing.JFrame.<init>()V+20
+j  ImageWindow.<init>(Ljava/lang/String;Ljava/lang/String;IIII)V+1
+j  EyeOfThree.main([Ljava/lang/String;)V+156
+v  ~StubRoutines::call_stub
+
+---------------  P R O C E S S  ---------------
+
+Java Threads: ( => current thread )
+  0x00007fbae02e1800 JavaThread "AWT-EventQueue-0" [_thread_blocked, id=2318, stack(0x00007fbaaa83a000,0x00007fbaaa93b000)]
+  0x00007fbae02dd000 JavaThread "AWT-Shutdown" [_thread_blocked, id=2317, stack(0x00007fbaaa93b000,0x00007fbaaaa3c000)]
+  0x00007fbae02c2000 JavaThread "process reaper" daemon [_thread_blocked, id=2316, stack(0x00007fbad804d000,0x00007fbad8086000)]
+  0x00007fbae02bd800 JavaThread "AWT-XAWT" daemon [_thread_in_Java, id=2311, stack(0x00007fbaab2d7000,0x00007fbaab3d8000)]
+  0x00007fbae0299000 JavaThread "Java2D Disposer" daemon [_thread_blocked, id=2300, stack(0x00007fbaab7e8000,0x00007fbaab8e9000)]
+  0x00007fbae0131000 JavaThread "Service Thread" daemon [_thread_blocked, id=2298, stack(0x00007fbad9d32000,0x00007fbad9e33000)]
+  0x00007fbae012e800 JavaThread "C2 CompilerThread1" daemon [_thread_blocked, id=2297, stack(0x00007fbad9e33000,0x00007fbad9f34000)]
+  0x00007fbae012b800 JavaThread "C2 CompilerThread0" daemon [_thread_blocked, id=2296, stack(0x00007fbad9f34000,0x00007fbada035000)]
+  0x00007fbae0129800 JavaThread "Signal Dispatcher" daemon [_thread_in_vm, id=2295, stack(0x00007fbada035000,0x00007fbada136000)]
+  0x00007fbae00fe800 JavaThread "Finalizer" daemon [_thread_blocked, id=2294, stack(0x00007fbadaaf5000,0x00007fbadabf6000)]
+  0x00007fbae00fc800 JavaThread "Reference Handler" daemon [_thread_blocked, id=2293, stack(0x00007fbadabf6000,0x00007fbadacf7000)]
+=>0x00007fbae000a000 JavaThread "main" [_thread_in_native, id=2289, stack(0x00007fbae7ee7000,0x00007fbae7fe8000)]
+
+Other Threads:
+  0x00007fbae00f8000 VMThread [stack: 0x00007fbadacf7000,0x00007fbadadf8000] [id=2292]
+  0x00007fbae013b800 WatcherThread [stack: 0x00007fbad9c31000,0x00007fbad9d32000] [id=2299]
+
+VM state:not at safepoint (normal execution)
+
+VM Mutex/Monitor currently owned by a thread:  ([mutex/lock_event])
+[0x00007fbae00062d0] Threads_lock - owner thread: 0x00007fbae0129800
+
+Heap
+ PSYoungGen      total 9216K, used 2300K [0x00000000f2200000, 0x00000000f2c00000, 0x0000000100000000)
+  eden space 8192K, 28% used [0x00000000f2200000,0x00000000f243f320,0x00000000f2a00000)
+  from space 1024K, 0% used [0x00000000f2b00000,0x00000000f2b00000,0x00000000f2c00000)
+  to   space 1024K, 0% used [0x00000000f2a00000,0x00000000f2a00000,0x00000000f2b00000)
+ ParOldGen       total 19968K, used 0K [0x00000000d6600000, 0x00000000d7980000, 0x00000000f2200000)
+  object space 19968K, 0% used [0x00000000d6600000,0x00000000d6600000,0x00000000d7980000)
+ PSPermGen       total 21504K, used 7263K [0x00000000cc000000, 0x00000000cd500000, 0x00000000d6600000)
+  object space 21504K, 33% used [0x00000000cc000000,0x00000000cc717d98,0x00000000cd500000)
+
+Card table byte_map: [0x00007fbae48d0000,0x00007fbae4a71000] byte_map_base: 0x00007fbae4270000
+
+Polling page: 0x00007fbae8004000
+
+Code Cache  [0x00007fbadd000000, 0x00007fbadd270000, 0x00007fbae0000000)
+ total_blobs=363 nmethods=3 adapters=315 free_code_cache=48672Kb largest_free_block=49828480
+
+Compilation events (6 events):
+Event: 0.298 Thread 0x00007fbae012b800    1             java.lang.String::hashCode (55 bytes)
+Event: 0.309 Thread 0x00007fbae012b800 nmethod 1 0x00007fbadd0697d0 code [0x00007fbadd069920, 0x00007fbadd069a78]
+Event: 0.323 Thread 0x00007fbae012e800    2             java.lang.String::indexOf (70 bytes)
+Event: 0.327 Thread 0x00007fbae012e800 nmethod 2 0x00007fbadd06f890 code [0x00007fbadd06f9e0, 0x00007fbadd06fb58]
+Event: 0.537 Thread 0x00007fbae012e800    3             sun.nio.cs.UTF_8$Encoder::encode (361 bytes)
+Event: 0.545 Thread 0x00007fbae012e800 nmethod 3 0x00007fbadd07a8d0 code [0x00007fbadd07aa20, 0x00007fbadd07ac58]
+
+GC Heap History (0 events):
+No events
+
+Deoptimization events (0 events):
+No events
+
+Internal exceptions (10 events):
+Event: 0.186 Thread 0x00007fbae000a000 Threw 0x00000000f22769a0 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+Event: 0.194 Thread 0x00007fbae000a000 Threw 0x00000000f227dfe0 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+Event: 0.249 Thread 0x00007fbae000a000 Threw 0x00000000f228d210 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jni.cpp:721
+Event: 0.306 Thread 0x00007fbae000a000 Threw 0x00000000f22aab78 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/classfile/systemDictionary.cpp:185
+Event: 0.323 Thread 0x00007fbae000a000 Threw 0x00000000f22c8bb0 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+Event: 0.323 Thread 0x00007fbae000a000 Threw 0x00000000f22c8cd8 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+Event: 0.323 Thread 0x00007fbae000a000 Threw 0x00000000f22cb388 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+Event: 0.323 Thread 0x00007fbae000a000 Threw 0x00000000f22cb4b0 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+Event: 0.324 Thread 0x00007fbae000a000 Threw 0x00000000f22cbeb0 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+Event: 0.324 Thread 0x00007fbae000a000 Threw 0x00000000f22cbfd8 at /build/openjdk-7-hGnxiC/openjdk-7-7u95-2.6.4/build/openjdk/hotspot/src/share/vm/prims/jvm.cpp:1322
+
+Events (10 events):
+Event: 0.624 loading class 0x00007fbae43f4e90 done
+Event: 0.624 loading class 0x00007fbac0052ec0 done
+Event: 0.624 loading class 0x00007fbac0052f20
+Event: 0.625 loading class 0x00007fbab4013e10
+Event: 0.625 loading class 0x00007fbab4013e10 done
+Event: 0.625 loading class 0x00007fbac0052f20 done
+Event: 0.625 loading class 0x00007fbac0052ba0
+Event: 0.625 loading class 0x00007fbac0052ba0 done
+Event: 0.626 loading class 0x00007fbac0051620
+Event: 0.627 loading class 0x00007fbac0051620 done
+
+
+Dynamic libraries:

@@ -1,0 +1,55 @@
+to testA
+
+loop [
+ 
+  grab
+  wait 10
+  see1f80
+  wait 100
+]
+end
+
+to see1f80
+  talkto 16
+  print 4567
+  print rl $1f80 40
+end
+
+to grab
+  talkto 16
+  print 1234
+  ul-run [ustar-rl 30 $1f80 40 $1f80]
+end
+
+to run-once
+
+ init-jlogo
+ see-packet 30
+ wait 30
+ see-packet 16
+end
+
+to see-packet :n
+  talkto :n
+  print :who
+   print "|Process Packet|
+;    make "packet-bytes retrieve-packet
+    make "packet-bytes rl $1f80 40
+    make "type nth 1 :packet-bytes ;p
+    print :type
+    print-packet
+end
+
+to init-jlogo
+  talkto 16
+  init-time
+  init-ulogo
+end
+
+to init-ulogo
+  stopvm        ;stop vm makes sure the board is not running
+  ul-power      ;run power up sequence
+;  ul-init       ;run initialization sequence
+;  ul-go         ;start experiment
+end
+

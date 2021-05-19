@@ -1,0 +1,258 @@
+;*****************************************************************************************
+; Code to run the two Digital to Analog Converters (DACs) on the uLogo App Board. This is
+; the MCP4921 surface mount DAC model.
+;
+; Written by Hunter Mills on 12/05/14
+; Based on code by Kevin Zack and Dr. Garrett Jernigan
+;
+; *****Code uses words and definitions defined in IOpins.txt and spiV3.txt *****
+;
+; Datasheet avaiable at:
+; http://akizukidenshi.com/download/MCP4922.pdf
+;*****************************************************************************************
+
+
+; Table of Contents
+;*****************************************************************************************
+; 1) Code/Device Description
+; 2) Physical Setup
+; 3) DAC Words
+; A) Initiation
+; B) DAC Write
+; 4) Operation Example: Using DAC0 to Create a Sine Wave
+;*****************************************************************************************
+
+
+; 1) DAC Code/Device Description
+;*****************************************************************************************
+; There are 2 DACs with 2^12 (4096) steps on the App Board. These steps range from 0V to
+; DAC REF. With how the DACs are wired on the App Board, DAC REF can range anywhere from
+; 0V to 3.3V.
+;
+; ***** Generally Speaking, DAC REF should be tied to 3.3V *****
+;
+; With DAC REF set to 3.3V, this would yield a step size of ~0.0008V.
+; With DAC REF set to 1.7V, this would yield a step size of ~0.0004V.
+;
+; Also with the setup, the DAC's latching feature is unavailable.
+;
+; Currently, there are two primary words: initiation and setting the DAC output. Each of
+; these words will be fully described in each word section.
+;*****************************************************************************************
+
+
+; 2) DAC Physical Setup
+;*****************************************************************************************
+; DAC0 and DAC1 are located at pin 2 and three as perthe digram below.
+;
+; App Board Pin Outs
+;
+; --------------------
+; | O |
+; 1. 3.3V Out | --- | 18. Ground
+; 2. ** DAC Out 0 **| | O | | 19. 3.3V
+; 3. ** DAC Out 1 **| --- | 20. 1-Wire
+; 4. p6.7 - ADC7 | | 21. ** DAC Ref **
+; 5. p6.6 - ADC6 | | 22. MSP Ref
+; 6. p6.5 - ADC5 | | 23. p1.3 - dp4
+; 7. p6.4 - ADC4 | | 24. p1.4 - dp5
+; 8. p6.3 - ADC3 | | 25. p3.1 - MOSI (SPI)
+; 9. p6.2 - ADC2 | ---- | 26. p3.2 - MISO (SPI)
+; 10. p6.1 - ADC1 | | | | 27. p3.3 - CLK (SPI)
+; 11. p6.0 - ADC0 | | | | 28. p3.0 - dp6
+; 12. p5.7 - dp0 | ---- | 29. p3.6 - TX (UART)
+; 13. p5.6 - dp1 | || | 30. p3.7 - RX (UART)
+; 14. p5.5 - dp2 | | 31. p5.0 - dp7
+; 15. p5.4 - dp3 | | 32. p5.1 - SDA (I2C)
+; 16. Reset | _________ _____ | 33. p5.2 - SCL (I2C)
+; 17. Ground | | | | | | 34. p5.3 - dp8
+; --------------------
+; Port 4 RFM-22B
+; (p4.0 - p4.7) (p1.5, p1.6, p1.7, p2.0)
+;
+; The select and SPI bus are internally integrated within the uLogo App Board design.
+; The reference pin however is not. Tie this pin to the value the DAC operates between.
+; Normally this will be 3.3V
+;*****************************************************************************************
+
+
+; 3A) DAC Initiation (init-dac)
+;*****************************************************************************************
+; This word initiates the DACs by initiating the SPI bus, and enables the select lines.
+; These settings are as per the DAC's Datasheet, and the SPI and GPIOs are setup as per
+; the MSP430's family guide.
+;
+
+constants [
+
+[p1dir $22][p1out $21][p1in $20][p1sel $26]
+[p2dir $2a][p2out $29][p2in $28][p2sel $2e]
+[p3dir $1a][p3out $19][p3in $18][p3sel $1b]
+[p4dir $1E][p4out $1D][p4in $1C][p4sel $1F]
+[p5dir $32][p5out $31][p5in $30][p5sel $33]
+[p6dir $36][p6out $35][p6in $34][p6sel $37]
+
+[channel0 $01][channel1 $02][channel2 $04][channel3 $08]
+[channel4 $10][channel5 $20][channel6 $40][channel7 $80]
+
+]
+
+define csdac0High[][bset p2out channel1] ; Defining the Device Select Lines.
+define csdac0Low[][bclr p2out channel1]
+
+define csdac1High[][bset p2out channel7]
+define csdac1Low[][bclr p2out channel7]
+
+to init-DAC
+
+bclr p2sel channel1 ; Enable GPIO
+bset p2dir channel1 ; Set GPIO as output
+
+bclr p2sel channel7 ; Enable GPIO
+bset p2dir channel7 ; Set GPIO as output
+
+csdac0High ; Deselect DACs
+csdac1High
+
+;ENABLE SPI BEGIN
+bset UCB0CTL1 UCSWRST ; Disable USCI
+
+bset p3sel channel1 ; Disable GPIO functionality
+bset p3sel channel2
+bset p3sel channel3
+
+bset UCB0CTL0 UCSYNC ; Setting Control Registers to Common Settings
+bclr UCB0CTL0 UCMODE0
+bclr UCB0CTL0 UCMODE1
+bset UCB0CTL0 UCMST
+bclr UCB0CTL0 UC7BIT
+bset UCB0CTL0 UCMSB
+bclr UCB0CTL0 UCCKPL
+bset UCB0CTL0 UCCKPH
+
+bset UCB0CTL1 UCSSEL1
+bclr UCB0CTL1 UCSSEL0
+
+writeb ucb0br0 12
+writeb ucb0br1 0
+
+bclr UCB0CTL1 UCSWRST ; Re-Enable USCI
+;END
+
+end
+;*****************************************************************************************
+
+
+; Set DAC Outputs (DAC0-write and DAC1-write)
+;*****************************************************************************************
+; These word accept one input which sets the DAC to that step. With DAC REF tied to 3.3V,
+; "DAC0-Write 4095" would set the DAC0 Out pin off the App Board to 3.3V, and "DAC0-Write
+; 0" would set the DAC0 pin off the App Board to 0V.
+;
+; This device uses the SPI communication protocol that communicates in chunks of 8 bits.
+; This is a 12 Bit DAC, so the input must be spilt into high and low bytes.
+;
+; ***** DAC Initiation must be run prior to Setting DAC Outputs *****
+;
+
+to DAC0-Write :val
+if :val > 4095 [make "val 4095] ; Keep input in DAC's Range of 0 - 4095
+
+csdac0Low ; Select DAC0
+
+let [high 0] ; Temporary Variables for high and low bytes
+let [low 0]
+
+make "high (lsh :val -8) ; Separating high and low byte.
+make "low (:val - 256 * :high)
+
+make "high :high + $30 ; Set gain to X1
+
+spi-tx :high ; Send High Byte
+spi-tx :low ; Send Low Byte
+
+csdac0High ; Deselect DAC0
+end
+
+to DAC1-Write :val
+if :val > 4095 [make "val 4095] ; Keeo input in DAC's Range of 0 - 4096
+
+csdac1Low ; Select DAC1
+
+let [high 0] ; Temporary Variables for high and low bytes
+let [low 0]
+
+make "high (lsh :val -8) ; Separating high and low byte.
+make "low (:val - 256 * :high)
+
+make "high :high + $30 ; Set gain to X1
+
+spi-tx :high ; Send High Byte
+spi-tx :low ; Send Low Byte
+
+csdac1High ; Deselect DAC1
+end
+;*****************************************************************************************
+
+
+; Operation Example: Using DAC0 to Create a Sine Wave
+;*****************************************************************************************
+; The code below is an example of how to create a Sine wave using DAC0. It uses the
+; Minsky circle algorithm to create a Sine wave with 128 time steps and 512 steps from
+; 0V to 3.3V.
+;
+; It creates a word that creates one cycle of a sine wave. It accepts one parameter that
+; is the delay in milliseconds between each time step.
+;
+; The Minsky Circle is essential an iterative rotation transformation.
+;
+; BEGIN PSEUDOCODE:
+;
+; uLogo Comipled Words:
+;
+to DAC0-Sine-Cycle :delay
+
+let [xi 256]
+let [yi 0]
+
+DAC0-write ((:yi * 8) + 2048)
+
+repeat 128 [
+
+make "xi :xi - ((:yi * 13) / 252)
+make "yi :yi + ((:xi * 13) / 252)
+
+mwait :delay
+
+DAC0-write ((:yi * 8) + 2048)
+]
+end
+
+to DAC1-Sine-Cycle :delay
+
+let [xi 256]
+let [yi 0]
+
+DAC1-write ((:yi * 8) + 2048)
+
+repeat 128 [
+
+make "xi :xi - ((:yi * 13) / 252)
+make "yi :yi + ((:xi * 13) / 252)
+
+mwait :delay
+
+DAC1-write ((:yi * 8) + 2048)
+]
+end
+;
+; uLogo Runtime Code:
+;
+; init-DAC
+;
+; loop [
+; DAC0-Sine-Cycle 10
+; ]
+;
+; END PSEUDOCODE
+;*****************************************************************************************

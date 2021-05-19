@@ -1,0 +1,83 @@
+to init-jlogo
+  talkto 16
+  init-time
+  init-ulogo
+end
+
+to init-ulogo
+  stopvm        ;stop vm makes sure the board is not running
+  print "before
+  ul-power      ;run power up sequence
+  print "after
+;  ul-init       ;run initialization sequence
+;  ul-go         ;start experiment
+end
+
+to retrieve-packet      ;reads the packet memory location on the MSP430
+
+  loop [
+    make "pack rl $1400 40
+;    print :pack
+    wait 20
+    let [m copylist :pack]
+
+;    make "pack shift-packet :m
+;    if((count :pack) = 0) [stop]
+    if ((nth 1 :pack) = 50) [
+        wl $1400 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+     ;  print :pack
+        output :pack 
+        ]
+    if ((nth 1 :pack) = 42) [
+        wl $1400 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]; clear pack
+     ;  print :pack
+       output :pack 
+       ]
+    if ((nth 1 :pack) = 72)  [
+        wl $1400 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] ; clear pack
+     ;  print :pack
+         output :pack  
+        ]
+;       ul-power
+    ]
+end
+
+to shift-packet :n
+    let [p copylist :n]
+    let [cnt 0]
+    repeat 30 [ 
+     ; print (se nth 0 :p nth 1 :p)
+      let [test-pac50 and ((nth 0 :p) = 16) ((nth 1 :p) = 50)]
+     ; print (se "50 :test-pac50)
+      let [test-pac72 and ((nth 0 :p) = 30) ((nth 1 :p) = 72)]
+     ; print (se "72 :test-pac72)
+      let [test-pac42 and ((nth 0 :p) = 24) ((nth 1 :p) = 42)]
+     ; print (se "42 :test-pac42)
+       if :test-pac50
+           [ output :p]
+       if :test-pac72
+           [ output :p]
+       if :test-pac42
+           [ output :p]
+        make "p bf :p make "cnt :cnt + 1
+       ]
+    output :p
+end
+
+
+to process-data-packet
+;  print :type
+  ;if (:type = 50 ) [ print :p50-word00 ]
+end
+
+
+to run-once
+;init-jlogo
+ loop [
+ wait 30
+; make "packet-bytes rl $1400 40
+; make "type nth 1 :packet-bytes
+ receive-packet 
+ ]
+end
+

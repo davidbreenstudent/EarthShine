@@ -1,0 +1,90 @@
+to dump :x :l
+if :l = 0 [make "l 1]
+repeat (:l + 15) / 16 [dumpline :x make "x :x + 16]
+end
+
+to dumpline :x
+prf "|%w - | :x
+repeat 16 [prf "|%b | readb :x make "x :x + 1]
+prs "
+end
+
+to readslice :addr
+repeat 16 
+ [ fprint read :addr 
+   make "addr :addr + 2 ]
+end
+
+to writeslice :addr :data
+repeat len :data
+ [ writefb :addr readb :data
+   make "addr :addr + 1
+   make "data :data + 1 ]
+prh :addr
+fprint :addr
+end
+
+to writeramslice :addr :data
+repeat len :data
+ [ writeb :addr readb :data
+   make "addr :addr + 1
+   make "data :data + 1 ]
+prh :addr
+fprint :addr
+end
+
+
+to checksum :addr :len
+let [res 0]
+repeat :len 
+ [ make "res :res + readb :addr 
+   make "addr :addr + 1]
+output :res
+end
+
+;to wdchecksum :addr :len
+;let [res 0]
+;repeat :len / 2 
+; [ make "res :res + read :addr 
+;   make "addr :addr + 2]
+;output :res
+;end
+
+to run-vector :addr
+if (readb :addr) = $ff [stop]
+call read :addr
+end
+
+; to clear-vectors
+; let [addr ram-vectors]
+; repeat 128 [write :addr $ffff make "addr :addr + 2]
+; end
+
+to memcopy :src :dst :len
+repeat :len 
+ [writeb :dst readb :src
+  make "src :src + 1 
+  make "dst :dst + 1]
+end
+
+to resetts    ; should be moved to vm.txt
+write $206 0
+write $208 0
+end
+
+; define code for morse
+to cwon
+  wreg 0x6d 0x06         ; sets power 0x07 is max
+  wreg 0x07 0x09         ; turn on cw
+end
+
+to cwoff
+  wreg 0x6d 0x00         ; set power to off
+  wreg 0x07 0x00         ; turns off cw
+end
+
+to cwonfor :n
+cwon
+mwait :n
+cwoff
+end

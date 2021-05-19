@@ -1,0 +1,2 @@
+blindexec "|scp -P 25000 /home/lbym/Pictures/lbym35.jpg lbym@192.168.2.1:/home/lbym/hpstream_backups/Desktops/lbym35.jpg|
+
